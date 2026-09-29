@@ -1,0 +1,1830 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학교 구매 현황 대시보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@500;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --bg:#F8FAFC;
+    --surface:#FFFFFF;
+    --ink:#1E293B;
+    --muted:#64748B;
+    --border:#E2E8F0;
+    --navy:#42618F;
+    --navy-dark:#374F79;
+    --gold:#CB9440;
+    --gold-soft:#F5E9D1;
+    --miss-soft:#EEF2F6;
+    --danger:#C24A3A;
+    --radius:6px;
+    --shadow: 0 1px 2px rgba(30,41,59,.05), 0 1px 1px rgba(30,41,59,.04);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:'Noto Sans KR', system-ui, sans-serif;
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{ background: var(--gold-soft); }
+
+  /* ---------- Header ---------- */
+  header.top{
+    position:sticky; top:0; z-index:40;
+    background:var(--navy);
+    color:#fff;
+    padding:18px 28px;
+    display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    border-bottom:3px solid var(--gold);
+  }
+  header.top .title-block h1{
+    font-family:'Noto Serif KR', serif;
+    font-weight:700;
+    font-size:22px;
+    margin:0 0 4px 0;
+    letter-spacing:-0.01em;
+  }
+  header.top .title-block p{
+    margin:0; font-size:12.5px; color:rgba(255,255,255,.7);
+  }
+  .sync-row{ display:flex; align-items:center; gap:10px; font-size:12.5px; color:rgba(255,255,255,.7);}
+  .sync-dot{ width:7px; height:7px; border-radius:50%; background:#7BC67E; flex:none; }
+  .sync-dot.err{ background:var(--danger); }
+  .sync-dot.loading{ background:var(--gold); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.35;} }
+  button.refresh{
+    background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.4); color:#fff;
+    padding:6px 12px; border-radius:var(--radius); font-size:12.5px; cursor:pointer;
+    font-family:inherit;
+  }
+  button.refresh:hover{ background:rgba(255,255,255,.22); }
+
+  /* ---------- Tabs ---------- */
+  nav.tabs{
+    display:flex; gap:2px; padding:0 28px; background:var(--navy-dark);
+  }
+  nav.tabs button{
+    background:transparent; border:none; color:rgba(255,255,255,.65); padding:11px 18px;
+    font-family:'Noto Sans KR', sans-serif; font-size:13.5px; font-weight:500;
+    cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-1px;
+  }
+  nav.tabs button.active{ color:#fff; border-bottom-color:var(--gold); }
+  nav.tabs button:hover{ color:#fff; }
+
+  main{ max-width:1360px; margin:0 auto; padding:22px 28px 60px; }
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  /* ---------- KPI cards ---------- */
+  .kpis{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-bottom:20px; }
+  .kpi{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; box-shadow:var(--shadow);
+  }
+  .kpi .label{ font-size:11.5px; color:var(--muted); margin-bottom:6px; }
+  .kpi .value{ font-family:'Noto Serif KR', serif; font-size:22px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .kpi .sub{ font-size:11px; color:var(--muted); margin-top:3px; }
+  .kpi.accent .value{ color:var(--gold); }
+
+  /* ---------- Filters ---------- */
+  .filter-bar{
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:14px;
+    padding:12px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  }
+  .filter-bar .search-box{
+    flex:1 1 220px; position:relative;
+  }
+  .filter-bar .search-box input{
+    width:100%; padding:7px 10px; border:1px solid var(--border); border-radius:var(--radius);
+    font-family:inherit; font-size:13px; background:var(--bg);
+  }
+  .filter-item{ position:relative; }
+  .filter-btn{
+    background:var(--bg); border:1px solid var(--border); border-radius:var(--radius);
+    padding:7px 10px; font-size:12.5px; cursor:pointer; font-family:inherit; color:var(--ink);
+    display:flex; align-items:center; gap:6px; white-space:nowrap;
+  }
+  .filter-btn .count{
+    background:var(--navy); color:#fff; border-radius:10px; font-size:10.5px; padding:1px 6px;
+    font-variant-numeric:tabular-nums;
+  }
+  .filter-btn:hover{ border-color:var(--gold); }
+  .filter-btn.on{ border-color:var(--gold); background:var(--gold-soft); }
+  .filter-panel{
+    display:none; position:absolute; top:calc(100% + 4px); left:0; z-index:30;
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    box-shadow:0 6px 18px rgba(30,36,48,.14); min-width:220px; max-height:280px; overflow-y:auto;
+    padding:8px;
+  }
+  .filter-panel.open{ display:block; }
+  .filter-panel .fp-actions{ display:flex; justify-content:space-between; padding:2px 4px 8px; border-bottom:1px solid var(--border); margin-bottom:6px; }
+  .filter-panel .fp-actions a{ font-size:11px; color:var(--navy); cursor:pointer; text-decoration:underline; }
+  .filter-panel label{
+    display:flex; align-items:center; gap:7px; padding:4px 4px; border-radius:4px; cursor:pointer; font-size:12.5px;
+  }
+  .filter-panel label:hover{ background:var(--bg); }
+  .filter-panel label span.n{ margin-left:auto; color:var(--muted); font-size:11px; }
+  .clear-all{
+    font-size:12px; color:var(--danger); cursor:pointer; text-decoration:underline; white-space:nowrap;
+  }
+  .date-range{
+    display:flex; align-items:center; gap:6px; font-size:12.5px; color:var(--muted);
+    background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:5px 10px;
+  }
+  .date-range label{ color:var(--ink); font-weight:500; white-space:nowrap; }
+  .date-range input[type="month"]{
+    border:1px solid var(--border); border-radius:4px; padding:4px 6px; font-family:inherit; font-size:12.5px;
+    background:#fff; color:var(--ink);
+  }
+  .date-hint{ font-size:11.5px; color:var(--muted); margin:-8px 0 14px; }
+
+  /* ---------- Merged dashboard ---------- */
+  .map-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; margin-bottom:20px; box-shadow:var(--shadow);
+  }
+  .map-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .map-head h2{ font-family:'Noto Serif KR', serif; font-size:16px; margin:0; }
+  .year-toggle{ display:flex; border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+  .yr-btn{
+    background:var(--surface); border:none; padding:6px 14px; font-size:12.5px; cursor:pointer;
+    font-family:inherit; color:var(--muted); border-left:1px solid var(--border);
+  }
+  .yr-btn:first-child{ border-left:none; }
+  .yr-btn.active{ background:var(--navy); color:#fff; }
+  .map-body{ display:grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 360px); gap:20px; align-items:start; }
+  .map-svg-wrap{ position:relative; width:100%; min-width:0; }
+  #koreaMap{ width:100%; height:auto; display:block; }
+  #koreaMap path{ stroke:#fff; stroke-width:1.8; stroke-linejoin:round; cursor:pointer; transition:opacity .15s; }
+  #koreaMap path:hover{ opacity:.75; }
+  #koreaMap text{
+    font-family:'Noto Sans KR', sans-serif; fill:#fff; text-anchor:middle;
+    pointer-events:none; font-weight:700; paint-order:stroke; stroke:rgba(0,0,0,.45); stroke-width:2.5px;
+  }
+  #koreaMap text.region-label-lg{ font-size:11.5px; }
+  #koreaMap text.region-label-sm{ font-size:8px; }
+  .map-side{ width:100%; min-width:0; display:flex; flex-direction:column; gap:10px; }
+  .map-legend{ display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); }
+  .legend-bar{
+    width:120px; height:9px; border-radius:5px;
+    background:linear-gradient(90deg, #FAF4E5 0%, #F4DEB1 25%, #E7B368 50%, #D68F42 75%, #B96A2E 100%);
+  }
+  .region-rank{
+    list-style:none; margin:0; padding:0; font-size:13px;
+    border:1px solid var(--border); border-radius:var(--radius); overflow:hidden;
+    max-height:460px; overflow-y:auto;
+  }
+  .region-rank li{
+    display:flex; align-items:center; gap:8px; padding:7px 12px; border-bottom:1px solid #EEF1F5;
+  }
+  .region-rank li:last-child{ border-bottom:none; }
+  .region-rank .swatch{ width:10px; height:10px; border-radius:2px; flex:none; }
+  .region-rank .rname{ flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .region-rank .rdetail{ font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; }
+  .region-rank .rpct{ font-variant-numeric:tabular-nums; font-weight:600; color:var(--ink); font-size:13px; }
+  .region-rank .rpct.na{ color:var(--muted); font-weight:400; }
+  .map-tooltip{
+    position:absolute; display:none; background:var(--navy-dark); color:#fff; padding:6px 10px;
+    border-radius:5px; font-size:11.5px; pointer-events:none; white-space:nowrap; z-index:20;
+    box-shadow:0 4px 10px rgba(0,0,0,.25);
+  }
+  .merged-tables{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .merged-tables{ grid-template-columns:1fr; } }
+  .merged-col-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; flex-wrap:wrap; }
+  .merged-col-head h3{ font-family:'Noto Serif KR', serif; font-size:14.5px; margin:0; }
+  .merged-col-head input[type="text"]{
+    padding:6px 9px; border:1px solid var(--border); border-radius:var(--radius); font-size:12px;
+    font-family:inherit; background:var(--bg); min-width:160px;
+  }
+  .table-wrap.small table{ font-size:12px; min-width:0; }
+  .table-wrap.small{ max-height:480px; }
+  @media (max-width:760px){
+    .map-body{ grid-template-columns: 1fr; }
+  }
+
+  /* ---------- 분석 탭 ---------- */
+  .insight-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px; }
+  @media (max-width:900px){ .insight-grid{ grid-template-columns:1fr; } }
+  .metric-btn{
+    background:var(--surface); border:none; padding:6px 14px; font-size:12.5px; cursor:pointer;
+    font-family:inherit; color:var(--muted); border-left:1px solid var(--border);
+  }
+  .metric-btn:first-child{ border-left:none; }
+  .metric-btn.active{ background:var(--navy); color:#fff; }
+  .chart-wrap{ position:relative; }
+  #trendChart{ width:100%; height:auto; display:block; }
+  #trendChart rect{ cursor:pointer; transition:opacity .15s; }
+  #trendChart rect:hover{ opacity:.75; }
+  #trendChart .axis-label{ font-family:'Noto Sans KR',sans-serif; font-size:10px; fill:var(--muted); }
+  #trendChart .grid-line{ stroke:var(--border); stroke-width:1; }
+  #productChart{ width:100%; height:auto; display:block; }
+  #productChart rect{ cursor:pointer; transition:opacity .15s; }
+  #productChart rect:hover{ opacity:.75; }
+  #productChart text{ font-family:'Noto Sans KR',sans-serif; font-size:11px; fill:var(--ink); }
+  .chart-tooltip{
+    position:absolute; display:none; background:var(--navy-dark); color:#fff; padding:6px 10px;
+    border-radius:5px; font-size:11.5px; pointer-events:none; white-space:nowrap; z-index:20;
+    box-shadow:0 4px 10px rgba(0,0,0,.25);
+  }
+
+  /* ---------- Table ---------- */
+  .table-wrap{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    overflow:auto; box-shadow:var(--shadow);
+  }
+  table{ width:100%; border-collapse:collapse; font-size:12.8px; min-width:900px; }
+  thead th{
+    position:sticky; top:0; background:#EEF2F6; text-align:left; padding:9px 10px;
+    border-bottom:1px solid var(--border); font-weight:600; white-space:nowrap; cursor:pointer;
+    user-select:none;
+  }
+  thead th:hover{ background:#E2E8F0; }
+  thead th .arrow{ font-size:10px; color:var(--muted); margin-left:3px; }
+  tbody td{ padding:8px 10px; border-bottom:1px solid #EEF1F5; white-space:nowrap; }
+  tbody tr:hover{ background:#F5F8FC; }
+  td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  .badge{ display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+  .badge.buy{ background:var(--gold-soft); color:#92400E; }
+  .badge.miss{ background:var(--miss-soft); color:var(--muted); }
+
+  .result-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+  .result-count{ font-size:12.5px; color:var(--muted); }
+  .pager{ display:flex; align-items:center; gap:6px; }
+  .pager button{
+    border:1px solid var(--border); background:var(--surface); border-radius:4px; padding:5px 9px;
+    font-size:12px; cursor:pointer; font-family:inherit;
+  }
+  .pager button:disabled{ opacity:.4; cursor:default; }
+  .pager span{ font-size:12px; color:var(--muted); }
+
+  .state-msg{ padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
+  .state-msg.err{ color:var(--danger); }
+  .state-msg code{ background:#EEF2F6; padding:2px 6px; border-radius:4px; }
+
+  footer.foot{ text-align:center; padding:20px; font-size:11.5px; color:var(--muted); }
+
+  @media (max-width:640px){
+    header.top{ padding:14px 16px; }
+    main{ padding:16px 14px 40px; }
+    nav.tabs{ padding:0 14px; }
+  }
+
+  /* ---------- 교과서 점유율 탭 ---------- */
+  #sharePubChart,#shareRegChart{ width:100%; height:auto; display:block; }
+  #sharePubChart text,#shareRegChart text{ font-family:'Noto Sans KR',sans-serif; font-size:11px; fill:var(--ink); }
+  #sharePubChart rect,#shareRegChart rect{ cursor:pointer; transition:opacity .15s; }
+  #sharePubChart rect:hover,#shareRegChart rect:hover{ opacity:.75; }
+  #shareLegend{ margin-bottom:10px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="title-block">
+    <h1>초코클래스 학교 구매 현황</h1>
+    <p>DB · 구매현황 시트를 실시간으로 불러옵니다</p>
+  </div>
+  <div class="sync-row">
+    <span class="sync-dot loading" id="syncDot"></span>
+    <span id="syncText">불러오는 중…</span>
+    <button class="refresh" id="refreshBtn">새로고침</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="merged">통합 대시보드</button>
+  <button class="tab-btn" data-tab="insight">분석</button>
+  <button class="tab-btn" data-tab="school">학교 현황</button>
+  <button class="tab-btn" data-tab="tx">구매 내역</button>
+  <button class="tab-btn" data-tab="share">교과서 점유율</button>
+</nav>
+
+<main>
+  <!-- ===================== 통합 대시보드 ===================== -->
+  <section id="panel-merged" class="panel active">
+    <div class="filter-bar" id="mergedFilterBar">
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedRegionBtn" type="button">지역</button>
+        <div class="filter-panel" id="mergedRegionPanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedDistBtn" type="button">총판명</button>
+        <div class="filter-panel" id="mergedDistPanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedEstBtn" type="button">설립구분</button>
+        <div class="filter-panel" id="mergedEstPanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedLevelBtn" type="button">학교급</button>
+        <div class="filter-panel" id="mergedLevelPanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedTypeBtn" type="button">유형구분</button>
+        <div class="filter-panel" id="mergedTypePanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedProductBtn" type="button">상품군</button>
+        <div class="filter-panel" id="mergedProductPanel"></div>
+      </div>
+      <div class="filter-item">
+        <button class="filter-btn" id="mergedPurchaseBtn" type="button">연도별 구입구분</button>
+        <div class="filter-panel" id="mergedPurchasePanel"></div>
+      </div>
+      <div class="date-range">
+        <label>기간</label>
+        <input type="month" id="mergedDateStart">
+        <span>~</span>
+        <input type="month" id="mergedDateEnd">
+      </div>
+      <span class="clear-all" id="mergedClearAll">필터 초기화</span>
+    </div>
+    <p class="date-hint">※ 유형구분·연도별 구입구분은 위에서 선택한 지도 기준 연도(2025/2026)를 따릅니다.</p>
+
+    <div class="kpis" id="mergedKpis"></div>
+    <p class="date-hint">※ 위 지표와 지도는 "연도별 구입구분" 필터와 무관하게 항상 실제 구매율을 보여줍니다 (이 필터까지 적용하면 모수 자체가 구매 학교로 좁혀져 구매율이 무의미하게 100%가 되기 때문입니다). 아래 학교 목록·구매 내역 표에는 모든 필터가 그대로 적용됩니다.</p>
+
+    <div class="map-card">
+      <div class="map-head">
+        <h2>지역별 구매율</h2>
+        <div class="year-toggle">
+          <button class="yr-btn active" data-yr="2025">2025</button>
+          <button class="yr-btn" data-yr="2026">2026</button>
+        </div>
+      </div>
+      <div class="map-body">
+        <div class="map-svg-wrap">
+          <svg id="koreaMap" viewBox="0 0 520 551" role="img" aria-label="지역별 구매율 지도"></svg>
+          <div class="map-tooltip" id="mapTooltip"></div>
+        </div>
+        <div class="map-side">
+          <div class="map-legend">
+            <span>0%</span>
+            <div class="legend-bar"></div>
+            <span>100%</span>
+          </div>
+          <ol class="region-rank" id="regionRankList"></ol>
+        </div>
+      </div>
+    </div>
+
+    <div class="merged-tables">
+      <div class="merged-col">
+        <div class="merged-col-head">
+          <h3>학교 목록</h3>
+          <input type="text" id="mergedSchoolSearch" placeholder="학교명 · 코드 검색">
+        </div>
+        <div class="result-row">
+          <div class="result-count" id="mergedSchoolCount">-</div>
+          <div class="pager" id="mergedSchoolPager"></div>
+        </div>
+        <div class="table-wrap small">
+          <table id="mergedSchoolTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="merged-col">
+        <div class="merged-col-head">
+          <h3>구매 내역</h3>
+          <input type="text" id="mergedTxSearch" placeholder="거래처 · 코드 검색">
+        </div>
+        <div class="result-row">
+          <div class="result-count" id="mergedTxCount">-</div>
+          <div class="pager" id="mergedTxPager"></div>
+        </div>
+        <div class="table-wrap small">
+          <table id="mergedTxTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 분석 ===================== -->
+  <section id="panel-insight" class="panel">
+    <p class="date-hint">※ 지역·총판·설립구분·학교급·기간 등 조건은 "통합 대시보드" 탭에서 설정한 필터가 그대로 적용됩니다. 기준 연도도 그 탭의 2025/2026 토글을 따라갑니다.</p>
+
+    <!-- 월별 매출 추이 -->
+    <div class="map-card">
+      <div class="map-head">
+        <h2>월별 매출 추이</h2>
+        <div class="year-toggle">
+          <button class="metric-btn active" data-metric="supply">공급가액</button>
+          <button class="metric-btn" data-metric="count">거래건수</button>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <svg id="trendChart" viewBox="0 0 900 260" preserveAspectRatio="none"></svg>
+        <div class="chart-tooltip" id="trendTooltip"></div>
+      </div>
+    </div>
+
+    <!-- 이탈/신규 학교 -->
+    <div class="insight-grid">
+      <div class="map-card">
+        <div class="map-head">
+          <h2>이탈·미갱신 학교</h2>
+          <span class="badge miss" id="churnCountBadge">-</span>
+        </div>
+        <p class="date-hint" style="margin-top:-4px;">2025년엔 구매했지만 2026년에는 아직 구매하지 않은 학교입니다.</p>
+        <div class="result-row">
+          <div class="result-count" id="churnCount">-</div>
+          <div class="pager" id="churnPager"></div>
+        </div>
+        <div class="table-wrap small">
+          <table id="churnTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="map-card">
+        <div class="map-head">
+          <h2>신규 구매 학교</h2>
+          <span class="badge buy" id="newCountBadge">-</span>
+        </div>
+        <p class="date-hint" style="margin-top:-4px;">2025년엔 구매하지 않았지만 2026년에 새로 구매한 학교입니다.</p>
+        <div class="result-row">
+          <div class="result-count" id="newCount">-</div>
+          <div class="pager" id="newPager"></div>
+        </div>
+        <div class="table-wrap small">
+          <table id="newTable"><thead><tr></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 상품군별 매출 비중 -->
+    <div class="map-card">
+      <h2 style="font-family:'Noto Serif KR',serif; font-size:16px; margin:0 0 12px;">상품군별 매출 비중</h2>
+      <div class="map-body">
+        <div class="map-svg-wrap">
+          <svg id="productChart" viewBox="0 0 700 320"></svg>
+          <div class="chart-tooltip" id="productTooltip"></div>
+        </div>
+        <div class="map-side">
+          <ol class="region-rank" id="productRankList"></ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- 교육지원청 단위 구매율 -->
+    <div class="map-card">
+      <h2 style="font-family:'Noto Serif KR',serif; font-size:16px; margin:0 0 12px;">교육지원청 단위 구매율</h2>
+      <div class="filter-bar">
+        <div class="search-box">
+          <input type="text" id="districtSearch" placeholder="교육지원청명 검색">
+        </div>
+      </div>
+      <div class="result-row">
+        <div class="result-count" id="districtCount">-</div>
+        <div class="pager" id="districtPager"></div>
+      </div>
+      <div class="table-wrap small">
+        <table id="districtTable"><thead><tr></tr></thead><tbody></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== 학교 현황 ===================== -->
+  <section id="panel-school" class="panel">
+    <div class="kpis" id="schoolKpis"></div>
+    <div class="filter-bar" id="schoolFilterBar">
+      <div class="search-box">
+        <input type="text" id="schoolSearch" placeholder="학교명 · 정보공시코드 검색">
+      </div>
+      <div class="date-range">
+        <label>구매 기간</label>
+        <input type="month" id="schoolDateStart">
+        <span>~</span>
+        <input type="month" id="schoolDateEnd">
+      </div>
+    </div>
+    <p class="date-hint">※ DB시트에는 날짜 항목이 없어 구매내역 시트의 거래월을 학교코드로 연결해 필터링합니다. (해당 기간에 거래가 1건이라도 있는 학교만 표시)</p>
+    <div class="result-row">
+      <div class="result-count" id="schoolCount">-</div>
+      <div class="pager" id="schoolPager"></div>
+    </div>
+    <div class="table-wrap">
+      <table id="schoolTable">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 구매 내역 ===================== -->
+  <section id="panel-tx" class="panel">
+    <div class="kpis" id="txKpis"></div>
+    <div class="filter-bar" id="txFilterBar">
+      <div class="search-box">
+        <input type="text" id="txSearch" placeholder="거래처명 · 정보공시코드 · 비고 검색">
+      </div>
+      <div class="date-range">
+        <label>매출월 기간</label>
+        <input type="month" id="txDateStart">
+        <span>~</span>
+        <input type="month" id="txDateEnd">
+      </div>
+    </div>
+    <div class="result-row">
+      <div class="result-count" id="txCount">-</div>
+      <div class="pager" id="txPager"></div>
+    </div>
+    <div class="table-wrap">
+      <table id="txTable">
+        <thead><tr></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ===================== 교과서 점유율 ===================== -->
+  <section id="panel-share" class="panel">
+    <div class="filter-bar" id="shareFilterBar">
+      <div class="search-box"><input type="text" id="shareSearch" placeholder="학교명 · 교육지원청 검색"></div>
+    </div>
+    <p class="date-hint">※ 초등 2022개정 교과서 주문부수 기준입니다(사회·수학·과학·영어·음악·미술·체육). 필터를 바꾸면 아래 차트와 표가 함께 바뀝니다.</p>
+    <div class="kpis" id="shareKpis"></div>
+    <div class="map-card">
+      <div class="map-head"><h2>출판사별 점유율</h2></div>
+      <div class="map-body">
+        <div class="map-svg-wrap"><svg id="sharePubChart" viewBox="0 0 700 320"></svg><div class="chart-tooltip" id="shareTip1"></div></div>
+        <div class="map-side"><ol class="region-rank" id="sharePubList"></ol></div>
+      </div>
+    </div>
+    <div class="map-card">
+      <div class="map-head"><h2>지역별 출판사 점유율</h2></div>
+      <div id="shareLegend"></div>
+      <div class="chart-wrap"><svg id="shareRegChart" viewBox="0 0 900 300"></svg><div class="chart-tooltip" id="shareTip2"></div></div>
+    </div>
+    <div class="result-row">
+      <div class="result-count" id="shareCount">불러오는 중…</div>
+      <div class="pager" id="sharePager"></div>
+    </div>
+    <div class="table-wrap"><table id="shareTable"><thead><tr></tr></thead><tbody></tbody></table></div>
+  </section>
+</main>
+
+<footer class="foot">Google Sheets 공개 CSV를 직접 불러와 표시합니다 · 원본 시트가 수정되면 새로고침 시 반영됩니다</footer>
+
+<script>
+/* ============================================================
+   설정
+   ============================================================ */
+const SHEET_BASE = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ7fk_Bt9PbBG_TwLEDoklM5p4DX3xhlnMipUxjg6LwSiFjGqMuEKhC_rk_Ik8fZ-blOdTToXeZT07V/pub';
+const DB_CSV_URL = SHEET_BASE + '?gid=1670570649&single=true&output=csv';
+const TX_CSV_URL = SHEET_BASE + '?gid=1625570690&single=true&output=csv';
+const PAGE_SIZE = 40;
+
+/* 대한민국 시도 경계 좌표 (southkorea/southkorea-maps, KOSTAT 2013 간소화본을 투영·변환) */
+const KOREA_MAP = {"W":520,"H":550.6,"paths":{"제주":"M195.8 508.2 L197.1 510.5 L196.7 511.7 L195.2 511.4 L194.7 510.3 L195.8 508.2 Z M182.0 504.1 L183.5 505.1 L185.7 504.8 L186.0 506.1 L188.1 508.0 L189.2 507.6 L191.6 508.1 L192.7 510.5 L191.8 511.9 L192.4 513.3 L194.3 513.2 L194.6 514.4 L193.5 515.3 L192.1 519.9 L192.0 521.3 L190.7 521.8 L189.3 523.3 L188.9 525.1 L187.0 527.0 L187.4 527.8 L186.3 529.4 L184.2 530.1 L181.8 529.6 L179.2 532.4 L178.1 532.4 L174.9 533.3 L172.3 533.1 L170.9 533.7 L169.2 536.0 L167.5 536.5 L166.5 535.7 L163.5 536.4 L161.4 536.1 L160.4 537.1 L158.8 537.1 L157.4 537.8 L155.8 536.1 L154.3 536.9 L152.8 535.7 L150.6 537.0 L145.4 536.3 L143.7 537.8 L143.3 539.4 L141.6 540.6 L139.8 538.8 L138.5 536.7 L135.9 535.6 L134.5 534.3 L132.7 531.0 L133.2 530.4 L132.9 527.9 L133.3 525.7 L135.1 523.9 L136.9 522.8 L137.7 521.3 L138.8 520.8 L140.7 518.8 L140.7 517.1 L144.3 515.4 L144.5 514.0 L146.7 513.9 L150.6 511.7 L151.4 512.2 L158.1 509.7 L159.2 508.6 L160.9 509.1 L162.9 507.7 L163.6 508.6 L166.2 508.0 L167.4 507.0 L170.2 506.9 L171.1 505.1 L172.2 505.6 L177.0 505.2 L177.6 504.7 L180.0 504.9 L182.0 504.1 Z","경남":"M297.4 398.0 L299.7 398.5 L300.6 401.1 L297.9 400.8 L296.4 399.5 L297.4 398.0 Z M292.6 392.1 L294.3 392.5 L294.7 394.1 L293.1 394.1 L292.6 392.1 Z M317.0 381.9 L317.8 385.2 L318.9 386.7 L317.6 387.6 L316.0 387.2 L316.1 385.8 L315.1 384.6 L317.0 381.9 Z M297.4 379.4 L299.5 381.6 L298.2 383.4 L295.5 382.7 L294.5 381.1 L295.8 379.6 L297.4 379.4 Z M294.1 377.5 L295.3 378.3 L294.1 380.5 L293.0 380.8 L291.9 379.3 L292.1 378.1 L294.1 377.5 Z M281.3 371.7 L281.6 373.7 L283.9 376.5 L283.4 378.9 L283.7 380.4 L280.6 378.8 L280.5 379.6 L277.6 379.8 L276.1 379.1 L275.6 376.6 L276.9 375.6 L278.3 372.6 L279.2 371.7 L281.3 371.7 Z M270.3 369.1 L272.1 369.7 L273.1 372.2 L272.5 373.7 L270.6 376.3 L272.6 380.4 L274.1 380.8 L275.0 382.9 L277.8 380.2 L281.2 380.4 L283.4 381.3 L283.5 383.4 L282.7 383.9 L283.1 388.7 L280.7 391.3 L279.7 390.8 L277.5 392.1 L275.2 392.3 L274.3 390.0 L274.6 385.6 L273.0 385.8 L271.0 386.8 L271.7 389.6 L269.6 391.1 L268.1 390.6 L267.2 388.9 L265.6 388.3 L266.9 386.4 L265.5 383.1 L263.8 380.0 L263.3 377.8 L264.9 376.1 L265.2 373.9 L266.8 373.3 L267.1 371.1 L268.4 369.5 L270.3 369.1 Z M332.5 359.9 L333.7 360.8 L335.1 360.6 L335.8 362.0 L334.3 363.2 L333.7 365.9 L336.3 369.0 L335.6 370.1 L336.0 372.2 L335.5 373.6 L333.8 374.6 L335.3 376.1 L336.9 374.5 L337.6 376.7 L334.3 379.4 L337.3 384.1 L334.9 383.9 L334.8 382.2 L333.4 382.7 L332.0 382.1 L331.5 384.1 L332.1 384.8 L329.2 387.0 L330.4 389.0 L331.6 388.7 L332.8 389.5 L328.0 390.0 L328.8 391.3 L327.0 393.1 L324.6 391.6 L326.5 390.6 L326.6 389.7 L324.4 389.2 L323.3 386.8 L321.7 385.9 L321.3 384.5 L324.5 383.9 L325.0 383.2 L325.1 380.3 L324.4 378.1 L321.8 380.1 L319.6 382.6 L318.4 380.1 L316.8 379.4 L316.0 375.9 L318.0 373.1 L319.5 372.6 L320.4 371.3 L322.1 372.8 L324.9 372.2 L326.1 373.5 L327.1 373.5 L326.0 370.0 L325.0 369.1 L327.8 367.5 L329.9 367.5 L330.2 365.8 L327.9 365.2 L328.6 362.9 L329.9 362.0 L330.4 365.0 L331.5 363.2 L332.5 359.9 Z M308.0 304.0 L308.9 304.4 L312.8 302.8 L314.0 301.3 L317.1 301.6 L318.7 301.2 L319.0 297.8 L320.4 297.0 L321.3 300.0 L321.2 302.8 L322.9 303.6 L325.0 306.4 L326.7 307.0 L330.8 305.3 L333.4 305.6 L334.4 307.2 L336.1 307.0 L338.9 308.2 L341.0 308.4 L342.1 306.2 L344.7 305.3 L346.3 305.4 L347.8 303.0 L350.9 301.4 L352.9 301.7 L356.5 304.3 L358.2 303.1 L359.6 303.6 L360.0 305.0 L359.5 306.6 L357.5 308.1 L355.6 308.9 L357.5 312.0 L359.7 312.4 L366.4 315.4 L366.6 316.8 L369.0 319.9 L370.6 321.2 L372.0 321.5 L373.5 320.8 L375.3 323.8 L374.0 325.8 L373.2 328.5 L371.7 329.4 L369.7 328.2 L368.0 330.0 L366.8 333.6 L365.0 334.1 L363.7 335.4 L362.7 334.9 L361.8 336.4 L358.9 337.1 L357.7 340.9 L351.8 342.7 L348.7 342.9 L347.6 344.1 L348.5 346.0 L347.3 347.5 L345.5 348.3 L341.6 348.4 L342.2 349.9 L344.6 351.1 L345.4 353.3 L343.8 354.1 L342.2 355.0 L340.4 353.8 L336.8 354.8 L334.4 353.6 L333.2 349.1 L331.2 351.0 L328.9 349.2 L327.3 349.6 L325.7 347.0 L325.1 343.3 L323.4 345.7 L326.3 350.8 L326.4 353.6 L328.0 355.0 L329.1 357.2 L326.5 358.4 L324.4 358.8 L323.0 357.0 L323.1 355.7 L321.0 352.8 L319.7 354.3 L317.4 353.4 L315.7 354.3 L315.2 356.8 L313.5 356.8 L312.5 358.4 L311.2 357.8 L308.8 359.0 L309.5 360.4 L313.9 358.8 L314.1 357.0 L316.9 357.5 L316.0 359.8 L318.5 362.4 L316.6 364.5 L315.4 365.1 L313.4 364.4 L313.5 367.5 L312.8 368.0 L313.0 370.5 L312.0 374.1 L312.9 375.8 L314.4 372.1 L315.8 374.8 L314.8 375.9 L314.5 378.8 L312.2 380.1 L313.6 380.8 L313.7 383.1 L313.2 385.4 L312.3 386.8 L310.9 387.1 L309.5 384.4 L308.5 383.9 L308.7 381.9 L305.5 380.6 L307.1 379.5 L308.4 380.8 L308.5 378.3 L309.9 377.2 L308.3 375.4 L307.4 376.6 L304.1 375.2 L302.3 373.4 L303.0 372.8 L306.8 372.7 L306.1 370.4 L305.1 369.3 L302.4 370.1 L302.5 372.4 L301.1 373.2 L299.7 372.4 L300.0 370.3 L297.7 369.3 L294.2 370.0 L294.8 371.3 L294.2 372.4 L294.7 374.2 L292.6 374.1 L288.3 373.2 L284.7 371.3 L283.0 370.8 L281.0 368.1 L282.7 366.0 L281.7 363.7 L282.5 362.2 L280.7 360.5 L279.3 361.5 L280.0 363.0 L279.8 364.6 L277.8 364.9 L277.3 366.0 L275.5 365.0 L274.5 366.1 L273.2 364.5 L272.9 362.5 L270.9 366.7 L271.0 367.9 L268.7 369.0 L265.7 368.7 L261.6 369.7 L260.0 366.5 L261.0 365.0 L261.8 362.1 L260.5 360.9 L260.3 358.9 L258.0 357.7 L257.8 356.2 L256.3 355.8 L254.4 353.7 L254.5 351.1 L248.6 345.4 L248.4 340.6 L247.7 338.2 L246.6 337.6 L245.1 333.6 L246.3 333.3 L248.6 331.3 L248.7 330.1 L247.7 328.0 L250.1 324.2 L251.8 323.0 L252.2 319.9 L250.4 319.8 L249.7 318.5 L249.8 317.0 L251.1 316.3 L249.0 312.5 L248.8 311.5 L246.2 309.6 L245.9 308.5 L247.8 306.6 L247.9 304.4 L249.1 303.3 L248.5 300.9 L249.2 298.9 L250.0 298.2 L250.5 295.4 L251.8 294.3 L251.8 289.5 L254.9 286.6 L256.4 285.7 L258.5 281.3 L260.6 281.7 L261.8 280.4 L263.5 280.2 L265.2 278.7 L266.0 278.9 L266.9 276.7 L269.7 274.3 L269.5 276.4 L270.2 277.0 L272.0 276.5 L273.1 277.8 L273.3 280.0 L274.7 279.5 L276.3 280.5 L277.5 279.9 L278.4 281.8 L279.6 282.7 L281.1 282.0 L282.7 282.6 L284.2 281.5 L288.5 283.3 L288.3 285.1 L288.8 286.5 L290.7 286.8 L291.6 289.1 L293.5 290.0 L294.6 293.0 L294.6 296.8 L292.9 297.9 L291.6 297.9 L291.6 299.8 L293.3 299.4 L294.6 300.8 L297.3 301.1 L297.9 299.6 L299.3 300.9 L300.7 300.0 L302.9 299.7 L306.8 300.9 L308.0 304.0 Z","경북":"M393.6 300.1 L390.6 298.8 L386.0 297.3 L381.9 300.3 L378.5 299.7 L378.1 298.6 L378.7 296.1 L378.0 295.1 L376.5 294.9 L374.3 293.2 L370.6 293.8 L369.5 292.9 L368.6 294.1 L364.9 295.1 L363.4 297.2 L363.3 299.3 L363.8 301.1 L361.7 300.2 L358.2 303.1 L356.5 304.3 L352.9 301.7 L350.9 301.4 L347.8 303.0 L346.3 305.4 L344.7 305.3 L342.1 306.2 L341.0 308.4 L338.9 308.2 L336.1 307.0 L334.4 307.2 L333.4 305.6 L330.8 305.3 L326.7 307.0 L325.0 306.4 L322.9 303.6 L321.2 302.8 L321.3 300.0 L320.4 297.0 L321.7 293.4 L324.6 291.5 L327.5 291.6 L327.0 292.8 L328.0 294.9 L329.2 294.7 L331.3 293.3 L332.8 293.1 L333.5 292.1 L333.8 289.6 L332.7 286.5 L335.4 284.9 L334.8 282.9 L338.2 279.9 L339.1 277.3 L338.6 274.2 L337.2 272.9 L337.7 271.4 L337.2 270.2 L337.8 268.8 L336.6 267.4 L336.1 265.4 L333.4 264.5 L327.6 265.3 L325.4 268.0 L322.7 268.8 L320.4 268.3 L321.0 271.8 L320.1 274.0 L317.7 276.1 L316.3 276.2 L315.7 275.1 L316.3 272.2 L313.6 272.3 L311.8 273.6 L310.6 276.8 L309.2 279.1 L309.5 280.6 L312.1 280.5 L315.1 281.4 L316.5 282.8 L315.8 284.7 L311.9 284.6 L310.9 285.8 L309.3 289.1 L309.8 290.8 L312.9 292.8 L313.0 295.0 L311.7 296.0 L307.1 294.5 L306.5 295.0 L306.8 297.1 L308.9 299.7 L310.6 301.0 L309.2 303.9 L308.0 304.0 L306.8 300.9 L302.9 299.7 L300.7 300.0 L299.3 300.9 L297.9 299.6 L297.3 301.1 L294.6 300.8 L293.3 299.4 L291.6 299.8 L291.6 297.9 L292.9 297.9 L294.6 296.8 L294.6 293.0 L293.5 290.0 L291.6 289.1 L290.7 286.8 L288.8 286.5 L288.3 285.1 L288.5 283.3 L284.2 281.5 L282.7 282.6 L281.1 282.0 L279.6 282.7 L278.4 281.8 L277.5 279.9 L276.3 280.5 L274.7 279.5 L273.3 280.0 L273.1 277.8 L272.0 276.5 L270.2 277.0 L269.5 276.4 L269.7 274.3 L269.3 273.0 L271.4 271.7 L270.3 267.4 L268.8 266.2 L268.9 263.7 L271.0 262.1 L272.0 260.6 L273.5 260.9 L275.6 259.2 L275.3 256.6 L276.0 254.3 L277.6 253.3 L278.3 250.9 L276.7 247.5 L277.5 246.3 L279.7 245.4 L281.7 246.9 L282.8 246.2 L282.6 244.8 L281.0 242.4 L282.3 240.8 L279.4 239.3 L277.2 240.0 L276.1 241.4 L274.6 240.8 L273.1 238.7 L270.1 237.3 L269.1 239.0 L266.8 238.9 L266.0 235.6 L266.9 233.6 L269.2 232.1 L270.0 230.9 L268.6 226.2 L269.3 224.6 L268.6 223.1 L269.3 220.8 L269.2 218.8 L271.2 216.2 L270.7 214.5 L268.6 213.2 L268.6 211.5 L267.6 210.3 L264.7 210.0 L262.6 208.0 L264.7 205.9 L266.7 205.9 L266.6 203.9 L267.7 203.7 L268.6 201.7 L269.9 204.3 L273.2 205.4 L273.7 202.2 L273.3 200.8 L269.7 198.2 L273.2 198.0 L273.2 196.7 L274.5 195.6 L275.6 193.7 L277.6 195.7 L278.8 195.7 L280.4 194.8 L282.4 196.5 L284.3 196.7 L284.1 195.2 L281.2 192.7 L283.0 188.2 L283.3 186.0 L285.3 187.2 L287.1 187.0 L287.5 185.7 L289.7 184.2 L291.7 185.6 L295.9 186.1 L295.6 182.8 L297.1 182.9 L297.8 180.5 L301.0 182.0 L302.1 184.2 L304.1 186.1 L305.1 185.9 L307.7 187.5 L308.9 186.2 L312.0 186.5 L314.2 182.8 L314.2 181.3 L312.3 180.1 L313.5 177.6 L313.7 175.1 L315.1 174.4 L315.3 173.1 L319.3 170.3 L319.4 169.3 L321.8 168.7 L323.9 166.4 L323.4 164.9 L324.9 163.7 L328.6 164.2 L330.3 161.6 L333.2 162.8 L334.1 164.0 L336.9 164.1 L338.2 165.2 L339.0 164.5 L338.2 162.4 L339.3 161.7 L340.9 159.4 L342.7 160.4 L344.2 160.3 L345.7 162.9 L348.0 163.6 L349.7 163.6 L351.7 159.0 L353.5 158.7 L354.8 160.4 L356.6 159.7 L363.0 161.4 L364.0 158.9 L365.5 158.2 L369.1 160.0 L373.4 164.0 L376.3 163.6 L375.8 160.8 L377.7 158.6 L379.0 158.0 L379.5 156.5 L381.2 156.8 L382.0 155.4 L384.8 153.8 L386.8 153.7 L388.1 156.2 L388.0 158.2 L390.0 160.4 L391.8 161.7 L390.8 162.8 L390.4 165.6 L391.1 167.4 L390.3 169.9 L391.2 172.8 L391.3 178.1 L390.8 178.9 L391.9 182.9 L394.2 186.1 L394.6 188.7 L395.9 190.7 L395.0 191.7 L395.7 194.2 L395.4 195.0 L395.7 197.5 L394.8 198.7 L392.6 200.3 L390.6 205.0 L390.4 207.7 L391.4 210.2 L392.8 211.9 L393.3 216.6 L392.3 218.6 L392.6 220.6 L392.5 223.9 L391.6 226.2 L389.3 230.1 L388.0 233.3 L388.2 234.3 L387.6 237.6 L388.1 239.0 L387.5 241.0 L388.4 242.4 L388.4 245.1 L387.4 245.6 L387.8 247.3 L389.1 248.3 L389.6 249.8 L389.4 252.7 L392.8 256.1 L391.1 257.2 L391.2 258.4 L388.1 260.0 L387.7 261.0 L388.3 263.0 L390.9 264.7 L392.0 266.2 L393.7 266.7 L395.5 264.6 L397.8 263.4 L397.9 262.3 L400.2 260.3 L401.3 257.6 L403.1 258.4 L404.1 264.0 L403.8 265.1 L402.0 266.8 L401.9 269.1 L400.2 272.1 L399.0 273.0 L399.7 275.2 L399.1 278.4 L399.7 279.3 L398.3 283.2 L398.7 283.9 L396.9 286.8 L397.3 288.3 L396.5 292.4 L395.4 294.9 L395.6 296.6 L393.6 300.1 Z M509.0 114.2 L509.2 116.2 L510.0 117.7 L509.6 120.8 L505.6 122.9 L503.1 122.4 L500.7 120.6 L500.9 118.7 L499.9 117.7 L504.2 115.6 L507.9 115.0 L509.0 114.2 Z","전남":"M193.9 463.0 L194.2 464.7 L192.8 464.8 L192.2 463.5 L193.9 463.0 Z M222.6 455.5 L223.2 460.5 L221.7 458.4 L221.7 456.8 L222.6 455.5 Z M48.3 452.2 L49.6 452.4 L50.4 454.1 L52.4 456.6 L51.5 457.2 L50.0 456.7 L49.7 455.6 L48.3 455.0 L48.3 452.2 Z M163.6 444.1 L164.7 445.0 L166.4 445.0 L165.8 447.6 L163.5 449.3 L161.7 449.9 L160.1 448.3 L160.9 445.1 L162.9 443.8 L163.6 444.1 Z M172.5 442.6 L174.1 443.6 L173.1 445.8 L174.0 448.1 L172.6 450.8 L170.4 449.1 L169.8 447.5 L171.4 445.3 L170.3 444.1 L171.6 442.1 L172.5 442.6 Z M180.6 441.0 L181.1 443.1 L179.5 443.3 L180.6 441.0 Z M190.8 440.5 L193.4 444.6 L192.7 446.6 L190.1 446.9 L187.2 444.7 L189.2 441.1 L190.8 440.5 Z M165.1 438.8 L167.3 439.5 L168.9 440.6 L169.6 441.9 L168.4 442.5 L169.0 444.0 L166.6 444.9 L164.5 444.2 L163.5 443.2 L164.9 440.3 L165.1 438.8 Z M219.7 437.1 L220.2 439.5 L219.7 441.1 L217.4 440.4 L217.8 438.6 L219.7 437.1 Z M169.0 437.2 L169.8 438.3 L167.1 438.8 L168.0 437.3 L169.0 437.2 Z M123.3 430.5 L124.5 431.9 L126.4 431.6 L127.6 434.6 L125.9 434.1 L124.4 434.9 L123.9 434.0 L122.3 433.9 L121.7 432.1 L123.3 430.5 Z M198.2 428.4 L200.5 429.2 L199.6 431.0 L197.1 432.2 L195.9 431.1 L196.0 429.5 L198.2 428.4 Z M122.5 428.4 L124.3 429.2 L123.1 430.2 L122.5 428.4 Z M186.6 427.1 L187.3 427.9 L189.0 427.4 L189.8 428.7 L191.2 429.2 L190.1 431.3 L188.8 430.8 L187.1 432.5 L186.0 430.0 L184.2 429.8 L183.4 430.6 L181.9 429.7 L182.5 427.7 L183.7 429.1 L185.0 427.6 L186.6 427.1 Z M202.1 424.9 L203.7 426.4 L206.6 426.6 L207.0 428.9 L205.9 428.8 L203.3 429.5 L199.9 426.7 L200.2 424.9 L202.1 424.9 Z M174.3 422.3 L175.7 422.7 L178.1 424.9 L177.9 426.3 L179.4 430.2 L181.2 431.1 L180.3 433.1 L178.1 433.6 L177.0 432.7 L175.1 433.1 L173.8 430.9 L171.5 429.1 L170.7 424.3 L171.4 423.3 L174.3 422.3 Z M195.0 421.3 L195.4 422.4 L194.1 425.4 L192.8 426.9 L188.5 425.2 L189.2 423.1 L190.3 422.2 L191.8 422.3 L193.9 423.5 L195.0 421.3 Z M218.8 421.2 L220.1 422.3 L220.9 424.5 L219.2 423.9 L219.4 422.2 L218.8 421.2 Z M186.3 418.4 L187.1 419.7 L188.7 423.5 L186.4 424.2 L182.8 424.5 L181.4 427.1 L180.8 426.5 L181.5 424.4 L180.0 423.9 L180.6 422.0 L182.6 419.3 L183.6 419.5 L186.3 418.4 Z M203.1 417.0 L204.6 417.5 L205.3 419.7 L204.6 422.2 L202.2 420.2 L201.9 417.7 L203.1 417.0 Z M263.2 416.6 L263.6 418.1 L263.4 421.0 L261.6 420.8 L262.6 417.5 L263.2 416.6 Z M236.1 415.5 L239.2 416.5 L239.5 415.8 L241.9 417.8 L241.8 419.7 L238.4 421.4 L238.3 419.3 L236.2 418.6 L235.4 417.2 L236.1 415.5 Z M217.0 413.5 L218.0 415.2 L216.2 419.4 L214.3 419.6 L212.7 419.1 L210.9 419.7 L209.2 419.5 L207.1 416.1 L209.2 413.8 L210.2 415.4 L211.8 414.8 L214.3 413.3 L215.2 413.9 L217.0 413.5 Z M124.7 413.1 L125.8 414.6 L123.3 417.0 L123.2 414.6 L124.7 413.1 Z M210.2 411.0 L209.7 412.2 L207.1 411.9 L208.4 410.6 L210.2 411.0 Z M235.7 408.3 L237.3 409.2 L235.9 411.8 L238.3 412.0 L239.1 413.3 L237.5 414.4 L235.2 414.9 L234.6 413.1 L235.7 412.5 L234.8 411.1 L233.8 410.9 L235.7 408.3 Z M258.1 407.6 L259.3 407.6 L259.8 409.3 L261.2 410.9 L262.5 413.4 L260.5 414.0 L260.2 413.2 L256.9 411.2 L255.9 408.9 L258.1 407.6 Z M251.5 404.4 L253.3 406.0 L251.6 407.6 L250.0 405.4 L251.5 404.4 Z M140.0 404.0 L144.2 405.8 L144.4 407.6 L146.8 408.2 L150.4 412.3 L149.5 416.1 L148.5 417.1 L149.1 418.4 L146.8 421.0 L145.0 422.0 L143.3 421.7 L142.6 423.1 L141.1 422.8 L140.9 424.6 L139.4 424.7 L136.0 426.6 L133.8 427.2 L130.8 426.5 L130.7 425.1 L129.2 424.4 L128.7 423.0 L127.1 420.7 L128.2 418.5 L131.6 415.1 L133.8 414.3 L134.2 412.6 L135.8 412.0 L137.9 409.3 L140.3 409.2 L140.8 408.0 L139.2 406.0 L140.0 404.0 Z M242.6 401.1 L244.1 401.7 L242.8 403.4 L241.4 402.6 L242.6 401.1 Z M108.7 400.0 L109.1 402.6 L107.6 403.3 L106.3 402.9 L105.9 401.5 L108.7 400.0 Z M125.5 399.5 L126.7 401.6 L128.3 402.4 L128.9 404.0 L127.7 405.5 L128.2 407.4 L126.9 407.4 L126.4 408.7 L123.9 409.9 L123.7 406.4 L125.2 406.8 L126.4 405.1 L125.1 402.1 L123.9 402.1 L124.0 400.1 L125.5 399.5 Z M123.9 397.2 L124.1 399.0 L123.0 401.5 L124.6 402.7 L125.2 404.6 L124.4 406.2 L121.6 406.5 L120.9 402.5 L120.9 399.9 L122.3 399.5 L122.3 398.4 L123.9 397.2 Z M131.8 395.7 L134.7 396.9 L135.2 399.8 L132.9 401.4 L130.2 401.0 L128.7 398.4 L129.4 396.7 L131.8 395.7 Z M126.7 394.7 L126.9 396.2 L126.3 398.7 L125.1 397.6 L125.2 394.7 L126.7 394.7 Z M72.1 393.4 L70.2 396.5 L69.4 395.7 L72.1 393.4 Z M135.6 392.6 L135.7 394.8 L134.4 395.9 L132.8 395.1 L132.7 393.8 L135.6 392.6 Z M75.9 393.1 L77.7 393.8 L76.3 395.1 L76.1 396.8 L74.7 397.2 L74.9 398.7 L73.7 399.2 L73.6 400.8 L72.0 400.2 L71.3 398.8 L72.4 395.4 L73.5 393.3 L75.9 393.1 Z M57.6 392.1 L57.7 393.6 L56.9 395.1 L54.8 395.9 L56.7 392.7 L57.6 392.1 Z M258.7 389.9 L261.7 391.5 L262.1 393.0 L260.9 395.0 L262.4 397.0 L262.8 400.0 L262.2 401.9 L263.2 403.9 L261.6 404.4 L258.8 403.7 L255.7 400.7 L256.8 399.3 L256.7 397.5 L258.7 396.1 L259.5 394.2 L259.4 392.0 L258.7 389.9 Z M117.6 390.3 L118.2 391.1 L121.2 392.2 L120.7 394.7 L119.1 395.3 L118.6 396.7 L117.4 397.5 L113.4 395.4 L113.4 392.2 L115.5 391.8 L117.0 389.5 L117.6 390.3 Z M126.5 385.5 L127.8 386.2 L129.9 385.8 L131.0 387.5 L133.0 387.5 L135.4 390.1 L135.6 391.3 L133.8 393.1 L131.6 394.5 L129.6 394.9 L128.7 393.6 L125.9 392.4 L125.4 391.5 L125.9 388.6 L126.4 388.0 L125.5 386.1 L126.5 385.5 Z M145.9 384.7 L145.4 387.4 L144.4 386.9 L144.4 385.4 L145.9 384.7 Z M119.8 382.9 L120.0 387.3 L118.3 388.0 L115.4 388.0 L116.2 389.8 L115.5 391.1 L113.6 391.8 L111.7 390.6 L111.3 386.8 L112.8 385.7 L115.0 385.7 L117.5 384.2 L118.0 383.1 L119.8 382.9 Z M146.1 381.9 L146.8 383.4 L144.9 384.0 L145.2 382.1 L146.1 381.9 Z M133.6 383.1 L134.0 387.1 L130.8 387.1 L129.9 385.4 L128.0 385.6 L128.0 384.1 L130.6 383.4 L132.5 381.1 L133.6 383.1 Z M249.6 378.6 L248.0 377.7 L249.6 376.5 L250.6 377.8 L249.6 378.6 Z M129.2 375.3 L131.0 376.0 L132.1 378.9 L129.1 380.9 L129.6 383.1 L128.1 383.7 L127.4 382.3 L124.7 378.5 L126.6 377.6 L128.2 378.4 L129.2 375.3 Z M256.2 373.7 L258.5 374.5 L258.5 376.3 L256.3 376.8 L254.2 375.1 L256.2 373.7 Z M143.6 371.4 L144.8 372.7 L146.7 372.7 L147.3 374.1 L145.9 374.6 L145.8 377.4 L148.3 377.1 L149.5 378.8 L148.4 382.0 L146.4 381.6 L147.0 379.6 L146.6 378.7 L142.0 377.9 L140.3 379.5 L138.1 378.5 L139.3 377.6 L141.0 377.6 L142.4 376.8 L144.0 374.2 L142.3 372.6 L143.6 371.4 Z M138.3 369.9 L140.3 370.6 L138.7 372.7 L137.5 371.2 L138.3 369.9 Z M125.0 370.1 L127.4 371.3 L128.3 373.5 L127.7 376.0 L126.8 377.2 L124.1 378.2 L119.8 377.0 L119.2 375.8 L121.2 372.3 L122.6 372.7 L123.3 371.7 L124.7 371.6 L125.0 370.1 Z M257.8 369.0 L257.9 370.5 L260.0 370.5 L261.6 372.1 L261.5 374.9 L259.6 374.3 L259.5 373.0 L255.2 372.4 L256.8 368.9 L257.8 369.0 Z M259.6 367.7 L260.3 370.3 L258.4 370.2 L258.1 368.6 L259.6 367.7 Z M137.1 365.1 L138.4 365.8 L136.9 370.0 L135.5 372.2 L135.0 369.1 L136.0 366.0 L137.1 365.1 Z M139.9 363.2 L140.8 363.2 L141.5 366.2 L139.8 365.8 L139.9 363.2 Z M130.7 361.1 L132.3 361.2 L133.7 362.4 L135.0 365.1 L133.9 369.1 L132.6 369.9 L129.9 368.6 L130.8 367.0 L130.6 363.7 L129.3 364.3 L127.8 363.7 L129.2 362.0 L130.7 361.1 Z M131.7 358.1 L133.4 358.3 L136.0 360.0 L135.6 361.4 L131.9 360.5 L130.6 358.8 L131.7 358.1 Z M132.9 349.8 L131.6 350.4 L130.2 352.4 L129.7 354.4 L129.5 357.8 L127.3 358.7 L125.8 358.0 L123.9 357.8 L123.4 355.5 L123.9 353.8 L126.8 352.9 L129.4 349.8 L132.9 349.8 Z M121.7 328.1 L123.3 330.2 L121.4 330.3 L121.7 328.1 Z M245.1 333.6 L246.6 337.6 L247.7 338.2 L248.4 340.6 L248.6 345.4 L254.5 351.1 L254.4 353.7 L256.3 355.8 L257.8 356.2 L258.0 357.7 L260.3 358.9 L260.5 360.9 L261.8 362.1 L261.0 365.0 L260.0 366.0 L259.6 367.1 L257.1 368.4 L254.9 370.6 L254.1 372.1 L250.1 374.9 L248.3 372.0 L246.2 371.7 L248.0 374.4 L246.1 376.1 L247.8 378.6 L250.3 380.4 L251.8 379.0 L252.5 379.8 L254.7 377.6 L257.5 378.0 L259.8 377.0 L260.8 377.5 L260.4 382.2 L259.3 384.9 L258.4 385.7 L259.2 387.0 L258.8 389.7 L255.2 391.2 L253.4 389.2 L251.5 387.8 L250.0 391.7 L248.8 393.0 L248.8 394.4 L250.1 398.5 L248.5 399.1 L246.1 397.9 L244.5 398.7 L243.1 396.9 L243.0 394.2 L244.3 390.4 L245.2 389.9 L246.1 387.5 L245.3 387.1 L243.5 382.7 L240.9 382.4 L242.0 380.3 L240.8 378.5 L240.1 375.7 L239.2 376.1 L236.8 379.0 L231.1 380.9 L232.7 382.3 L230.7 383.7 L230.0 385.4 L231.2 386.6 L230.8 387.6 L228.9 389.1 L230.3 392.1 L235.2 393.7 L235.0 396.0 L237.2 395.9 L236.9 397.6 L238.0 397.9 L239.5 403.8 L237.9 405.1 L235.5 404.6 L234.6 405.3 L232.0 403.9 L230.6 404.8 L231.7 406.8 L233.7 407.7 L232.9 409.7 L231.1 412.3 L229.4 412.5 L229.2 414.2 L225.5 415.4 L226.2 418.1 L224.9 418.5 L222.1 415.0 L220.6 414.5 L221.8 413.0 L219.7 410.9 L216.0 410.8 L214.8 409.6 L212.8 410.6 L210.1 410.5 L209.1 409.9 L208.2 408.2 L208.3 407.0 L210.8 404.5 L213.0 403.4 L213.0 400.3 L215.2 398.3 L215.8 400.2 L217.4 398.7 L217.8 395.2 L219.2 392.2 L221.4 391.3 L222.0 393.4 L221.5 395.8 L224.3 396.6 L224.5 394.9 L225.8 392.4 L225.0 388.1 L223.4 388.3 L222.6 390.2 L220.8 389.2 L220.1 390.1 L218.3 386.6 L215.9 389.5 L215.1 392.6 L213.7 393.9 L210.5 393.8 L209.5 392.9 L207.9 395.5 L204.8 396.8 L203.6 398.9 L198.9 401.5 L200.1 402.5 L198.8 403.6 L198.0 405.9 L198.4 408.9 L197.1 408.6 L196.1 409.7 L197.2 411.1 L196.4 412.6 L197.5 414.0 L195.7 415.7 L194.4 417.9 L193.4 417.4 L189.6 417.0 L190.4 419.8 L187.5 418.0 L185.0 417.8 L182.7 416.0 L182.9 413.9 L182.4 411.5 L182.8 409.6 L182.9 405.9 L181.3 402.7 L180.8 406.6 L181.0 407.4 L180.3 410.2 L180.2 413.4 L178.8 413.9 L179.4 415.5 L177.8 418.1 L175.4 418.7 L174.1 420.0 L171.8 420.5 L169.1 422.4 L169.3 426.7 L167.9 427.8 L167.9 430.0 L166.6 430.4 L164.3 430.3 L163.3 432.0 L161.1 432.5 L160.7 430.5 L161.8 429.0 L161.3 426.4 L158.2 426.6 L158.2 424.4 L159.3 423.6 L158.9 422.2 L161.0 421.2 L160.4 419.9 L158.9 419.2 L157.8 420.0 L156.4 417.7 L157.1 416.5 L156.2 415.1 L157.4 412.1 L156.6 409.6 L154.3 408.4 L154.2 407.4 L151.9 408.5 L150.2 406.6 L148.8 406.8 L146.6 405.6 L145.0 406.2 L144.3 403.9 L142.2 403.3 L142.7 400.1 L141.5 399.7 L140.9 397.1 L140.3 396.7 L140.5 393.8 L141.8 392.0 L141.8 390.4 L142.8 387.4 L143.9 387.1 L146.7 389.4 L147.9 392.9 L147.0 393.7 L147.2 395.7 L149.3 399.1 L149.9 401.2 L154.5 403.9 L154.0 401.6 L149.7 398.7 L148.5 395.5 L147.3 394.5 L149.3 393.3 L150.9 390.1 L149.1 389.5 L150.2 388.0 L150.1 386.6 L155.7 385.0 L155.1 383.5 L151.9 385.0 L149.3 385.2 L148.8 384.2 L149.4 382.1 L150.8 379.8 L152.3 378.3 L151.4 376.6 L151.9 375.5 L151.0 374.6 L152.1 372.5 L151.1 371.6 L150.8 369.0 L151.3 367.6 L150.1 366.6 L149.1 370.9 L147.3 372.2 L146.2 371.7 L145.5 369.3 L143.4 367.2 L144.4 365.1 L146.5 366.7 L148.5 365.1 L147.4 363.6 L150.9 361.4 L150.3 359.2 L147.9 360.0 L147.4 356.9 L146.1 355.1 L143.9 359.1 L143.2 358.0 L140.7 358.6 L141.8 360.1 L140.4 362.6 L138.0 361.5 L138.7 359.5 L137.7 358.2 L134.8 358.2 L132.8 357.3 L133.3 353.6 L135.2 352.8 L138.5 354.2 L139.5 353.0 L140.5 349.9 L141.6 349.5 L145.8 350.7 L147.4 349.0 L147.4 352.5 L146.6 354.8 L149.3 356.8 L151.5 356.3 L152.3 357.6 L151.7 360.6 L155.1 358.4 L155.9 356.6 L155.0 355.6 L156.5 354.8 L155.4 353.5 L153.3 353.3 L152.0 350.6 L148.8 347.5 L147.1 345.0 L144.4 346.4 L143.7 341.6 L144.7 338.9 L145.8 339.1 L145.7 335.6 L148.5 335.5 L150.0 333.9 L150.1 331.6 L151.6 327.7 L152.2 323.7 L153.5 321.9 L155.6 321.7 L158.0 322.3 L158.8 323.5 L158.3 326.1 L161.3 329.6 L161.2 331.9 L162.2 333.7 L163.8 333.1 L167.0 333.9 L166.1 332.1 L168.0 331.0 L169.6 332.4 L171.2 332.5 L172.9 329.4 L175.5 329.6 L175.9 328.1 L177.1 328.1 L178.0 327.0 L177.9 325.2 L179.7 322.4 L179.4 319.7 L180.6 318.2 L184.6 317.9 L185.6 316.2 L187.5 318.2 L188.9 318.6 L191.8 320.6 L191.2 321.4 L192.1 323.0 L193.8 324.1 L194.0 325.1 L196.4 325.2 L197.5 324.3 L197.0 322.0 L200.4 319.0 L202.1 318.2 L202.3 321.1 L203.2 321.6 L202.7 324.8 L201.8 325.6 L203.0 326.9 L203.8 326.2 L204.9 328.0 L204.5 330.9 L203.5 330.5 L203.1 332.7 L204.3 332.8 L208.5 334.5 L211.0 332.9 L212.7 331.3 L215.3 332.9 L216.4 332.9 L217.0 330.8 L220.0 333.3 L222.2 333.1 L223.6 334.1 L227.6 332.4 L229.8 334.1 L233.5 328.6 L236.7 327.9 L239.1 328.7 L241.4 330.8 L245.1 333.6 Z M192.0 338.5 L190.6 339.6 L189.4 339.3 L186.6 341.3 L183.9 342.4 L180.0 340.9 L180.6 338.9 L178.5 339.2 L177.1 341.6 L177.0 343.0 L175.8 343.5 L174.5 342.7 L173.8 344.9 L172.4 345.0 L173.3 347.2 L171.9 347.7 L171.7 352.0 L173.8 353.4 L174.5 352.9 L178.8 353.4 L180.5 354.9 L181.8 358.6 L183.1 357.8 L185.0 358.7 L187.9 356.2 L189.2 356.5 L193.2 355.0 L194.0 356.5 L195.5 356.7 L196.7 355.0 L198.4 354.6 L200.1 351.6 L200.0 348.6 L201.0 347.4 L199.5 345.4 L197.4 345.5 L194.0 340.3 L193.9 339.2 L192.0 338.5 Z M153.6 389.3 L151.6 389.3 L150.9 391.2 L156.0 392.6 L155.8 394.4 L157.4 397.2 L158.1 395.2 L159.3 396.6 L163.1 397.6 L162.8 394.9 L162.0 392.5 L159.6 389.7 L157.4 389.4 L156.5 390.3 L154.6 390.2 L153.6 389.3 Z","전북":"M144.2 302.9 L144.9 303.7 L144.2 305.4 L143.0 305.9 L140.9 307.9 L139.8 306.4 L141.5 306.1 L141.9 304.7 L143.2 304.6 L144.2 302.9 Z M249.9 259.2 L251.2 260.4 L251.6 262.0 L253.6 259.9 L254.6 260.4 L255.3 262.7 L257.3 262.7 L261.8 264.5 L262.8 263.3 L267.0 262.1 L268.9 263.7 L268.8 266.2 L270.3 267.4 L271.4 271.7 L269.3 273.0 L269.7 274.3 L266.9 276.7 L266.0 278.9 L265.2 278.7 L263.5 280.2 L261.8 280.4 L260.6 281.7 L258.5 281.3 L256.4 285.7 L254.9 286.6 L251.8 289.5 L251.8 294.3 L250.5 295.4 L250.0 298.2 L249.2 298.9 L248.5 300.9 L249.1 303.3 L247.9 304.4 L247.8 306.6 L245.9 308.5 L246.2 309.6 L248.8 311.5 L249.0 312.5 L251.1 316.3 L249.8 317.0 L249.7 318.5 L250.4 319.8 L252.2 319.9 L251.8 323.0 L250.1 324.2 L247.7 328.0 L248.7 330.1 L248.6 331.3 L246.3 333.3 L245.1 333.6 L241.4 330.8 L239.1 328.7 L236.7 327.9 L233.5 328.6 L229.8 334.1 L227.6 332.4 L223.6 334.1 L222.2 333.1 L220.0 333.3 L217.0 330.8 L216.4 332.9 L215.3 332.9 L212.7 331.3 L211.0 332.9 L208.5 334.5 L204.3 332.8 L203.1 332.7 L203.5 330.5 L204.5 330.9 L204.9 328.0 L203.8 326.2 L203.0 326.9 L201.8 325.6 L202.7 324.8 L203.2 321.6 L202.3 321.1 L202.1 318.2 L200.4 319.0 L197.0 322.0 L197.5 324.3 L196.4 325.2 L194.0 325.1 L193.8 324.1 L192.1 323.0 L191.2 321.4 L191.8 320.6 L188.9 318.6 L187.5 318.2 L185.6 316.2 L184.6 317.9 L180.6 318.2 L179.4 319.7 L179.7 322.4 L177.9 325.2 L178.0 327.0 L177.1 328.1 L175.9 328.1 L175.5 329.6 L172.9 329.4 L171.2 332.5 L169.6 332.4 L168.0 331.0 L166.1 332.1 L167.0 333.9 L163.8 333.1 L162.2 333.7 L161.2 331.9 L161.3 329.6 L158.3 326.1 L158.8 323.5 L158.0 322.3 L155.6 321.7 L154.1 320.9 L155.1 319.4 L158.4 313.0 L161.2 311.6 L163.0 312.2 L164.7 310.8 L167.9 310.7 L168.9 309.3 L169.0 308.0 L171.4 308.0 L172.8 309.5 L173.3 307.0 L170.5 305.7 L169.0 306.5 L165.7 306.0 L163.0 306.2 L161.9 307.1 L159.1 306.4 L157.1 304.7 L156.9 301.7 L158.5 299.6 L159.7 299.5 L162.3 296.5 L164.5 295.4 L165.3 295.8 L167.8 293.3 L169.8 290.5 L169.4 286.6 L171.1 285.7 L175.5 285.5 L177.8 286.1 L181.1 287.7 L181.7 285.3 L178.2 283.7 L175.5 281.6 L174.9 280.4 L178.0 279.0 L182.5 279.1 L183.4 278.3 L183.6 276.3 L182.2 275.5 L181.1 276.8 L178.5 276.5 L177.6 277.1 L175.5 276.3 L173.7 276.2 L173.0 277.3 L168.8 277.1 L168.5 274.1 L168.8 271.5 L167.3 271.0 L162.0 271.8 L161.4 268.7 L165.1 268.3 L171.0 268.0 L172.9 267.5 L174.0 266.0 L177.6 266.4 L178.3 265.8 L179.4 263.6 L181.5 262.8 L184.3 262.6 L185.9 261.3 L188.5 260.0 L189.4 256.9 L189.3 254.8 L190.8 252.1 L193.3 252.3 L195.9 250.6 L198.6 251.7 L199.6 251.3 L201.2 252.5 L203.3 252.0 L204.2 256.8 L205.8 258.3 L210.0 259.1 L210.2 257.4 L212.7 257.7 L213.6 256.7 L215.2 257.5 L215.6 256.1 L218.9 256.6 L219.3 254.9 L221.0 255.4 L222.7 254.8 L223.6 253.6 L226.2 253.1 L227.5 255.3 L227.9 257.1 L228.0 260.7 L229.0 262.5 L231.2 265.1 L233.1 263.3 L234.6 265.2 L235.5 267.5 L236.5 267.1 L238.0 268.1 L239.5 267.8 L241.7 266.7 L242.2 264.8 L242.0 262.7 L246.2 263.5 L247.0 264.7 L248.4 265.2 L249.4 261.9 L248.4 261.8 L248.8 259.4 L249.9 259.2 Z","충남":"M148.4 231.1 L148.6 233.6 L147.1 233.2 L148.4 231.1 Z M154.4 228.1 L156.5 231.2 L151.5 229.9 L150.7 228.6 L154.4 228.1 Z M147.1 226.3 L147.0 228.8 L145.7 227.9 L147.1 226.3 Z M148.7 205.9 L150.6 206.5 L151.7 208.9 L151.0 212.0 L151.5 215.1 L153.9 220.7 L154.6 224.9 L153.3 226.2 L152.3 225.4 L150.3 225.0 L149.5 225.7 L146.8 223.0 L145.9 220.1 L146.5 217.8 L145.5 211.2 L144.7 210.2 L144.7 208.6 L147.0 206.3 L148.7 205.9 Z M154.0 161.6 L155.8 162.7 L153.6 163.7 L154.0 161.6 Z M192.1 177.3 L199.0 174.3 L201.9 175.0 L204.2 173.9 L205.2 174.0 L208.3 170.7 L209.7 171.4 L210.8 170.8 L214.4 172.6 L215.4 172.7 L216.8 174.8 L218.7 176.1 L220.8 176.5 L222.3 178.4 L223.8 179.2 L223.6 181.4 L226.0 182.2 L225.8 184.6 L227.6 184.8 L229.6 186.2 L231.2 188.0 L230.7 189.1 L232.0 190.3 L232.0 191.8 L230.8 192.8 L230.1 191.6 L226.0 192.2 L226.4 194.2 L225.1 194.2 L223.8 195.3 L223.8 196.9 L222.0 198.3 L219.0 197.9 L215.5 194.9 L212.3 194.1 L210.0 196.7 L210.7 198.2 L212.1 198.2 L212.4 199.5 L211.6 200.8 L211.9 203.7 L211.7 206.6 L213.8 207.6 L214.7 209.0 L214.7 210.6 L213.0 213.4 L213.8 214.8 L212.9 215.8 L215.6 220.9 L215.3 222.6 L217.2 224.6 L219.8 225.9 L221.7 225.3 L221.6 229.2 L220.8 230.5 L221.4 231.7 L219.9 233.9 L219.9 236.9 L219.1 238.2 L221.6 239.9 L221.8 242.8 L224.3 244.2 L225.0 246.0 L226.4 247.4 L227.3 245.2 L228.3 244.4 L227.9 240.1 L228.9 239.2 L230.2 240.0 L230.0 241.4 L231.1 243.1 L231.7 245.1 L234.5 246.9 L236.5 244.9 L236.4 244.0 L238.4 242.6 L240.4 242.3 L241.5 241.5 L242.9 242.5 L245.3 243.1 L246.7 244.6 L246.3 246.8 L247.1 250.1 L246.1 252.8 L248.3 255.6 L248.4 256.7 L249.9 259.2 L248.8 259.4 L248.4 261.8 L249.4 261.9 L248.4 265.2 L247.0 264.7 L246.2 263.5 L242.0 262.7 L242.2 264.8 L241.7 266.7 L239.5 267.8 L238.0 268.1 L236.5 267.1 L235.5 267.5 L234.6 265.2 L233.1 263.3 L231.2 265.1 L229.0 262.5 L228.0 260.7 L227.9 257.1 L227.5 255.3 L226.2 253.1 L223.6 253.6 L222.7 254.8 L221.0 255.4 L219.3 254.9 L218.9 256.6 L215.6 256.1 L215.2 257.5 L213.6 256.7 L212.7 257.7 L210.2 257.4 L210.0 259.1 L205.8 258.3 L204.2 256.8 L203.3 252.0 L201.2 252.5 L199.6 251.3 L198.6 251.7 L195.9 250.6 L193.3 252.3 L190.8 252.1 L189.3 254.8 L189.4 256.9 L188.5 260.0 L185.9 261.3 L184.3 262.6 L181.5 262.8 L179.4 263.6 L178.3 265.8 L172.4 264.8 L173.0 262.8 L171.1 260.5 L170.2 260.4 L170.3 256.8 L168.1 255.2 L165.8 252.4 L164.4 253.2 L162.7 251.4 L160.7 251.1 L161.6 247.8 L163.1 246.6 L162.1 244.2 L162.1 242.5 L163.4 240.1 L161.9 236.8 L161.1 236.5 L159.9 234.1 L163.8 231.8 L160.4 228.7 L158.2 228.4 L158.8 225.5 L159.5 224.1 L158.3 221.6 L157.6 216.6 L158.5 215.4 L156.7 213.2 L155.5 208.6 L155.9 207.5 L157.8 206.6 L157.6 205.5 L156.3 204.6 L157.2 201.9 L156.6 200.8 L155.1 200.6 L155.3 202.8 L153.7 207.1 L152.6 206.9 L151.4 205.4 L149.0 204.5 L148.7 200.4 L147.1 200.5 L147.6 203.3 L148.3 204.6 L145.5 207.5 L143.3 208.7 L142.4 207.6 L142.7 205.4 L143.6 204.3 L142.7 200.9 L140.9 199.9 L140.8 197.7 L141.7 196.8 L141.5 194.8 L140.2 195.6 L138.2 198.1 L136.9 198.1 L135.7 199.9 L133.8 199.5 L130.4 200.5 L130.4 198.5 L131.7 198.7 L131.7 197.0 L133.7 195.6 L136.5 196.8 L137.6 195.2 L136.2 194.8 L134.7 192.2 L133.1 191.7 L131.8 192.4 L132.1 194.4 L130.8 195.6 L129.8 194.7 L130.7 193.4 L128.1 190.2 L130.3 190.1 L131.3 188.6 L132.6 185.0 L131.6 183.7 L133.0 183.0 L134.0 184.1 L135.4 182.7 L135.0 180.9 L136.6 177.7 L139.8 176.7 L139.3 178.9 L137.6 179.7 L139.3 181.3 L140.1 179.8 L141.5 179.4 L142.6 177.5 L143.3 174.9 L142.6 171.5 L144.5 170.5 L144.9 172.4 L144.1 173.5 L144.0 175.6 L145.4 177.2 L145.5 178.6 L143.4 183.4 L145.2 183.8 L142.4 185.8 L143.6 186.7 L146.9 185.8 L145.5 183.9 L145.8 182.0 L147.2 182.8 L148.9 182.6 L149.5 181.3 L148.9 180.1 L151.4 178.5 L152.5 177.1 L150.3 173.5 L146.6 171.9 L146.9 170.4 L145.9 168.6 L149.8 166.8 L153.8 166.5 L155.8 167.4 L158.0 171.1 L158.7 169.7 L156.0 165.5 L159.6 161.6 L161.3 162.2 L162.0 163.7 L167.5 166.3 L170.8 168.2 L175.9 168.0 L177.0 168.7 L182.0 170.3 L181.9 171.2 L183.7 175.4 L184.5 175.3 L184.8 178.1 L185.6 179.1 L186.0 181.5 L187.3 180.0 L189.9 179.0 L192.4 178.7 L192.1 177.3 Z","충북":"M330.3 161.6 L328.6 164.2 L324.9 163.7 L323.4 164.9 L323.9 166.4 L321.8 168.7 L319.4 169.3 L319.3 170.3 L315.3 173.1 L315.1 174.4 L313.7 175.1 L313.5 177.6 L312.3 180.1 L314.2 181.3 L314.2 182.8 L312.0 186.5 L308.9 186.2 L307.7 187.5 L305.1 185.9 L304.1 186.1 L302.1 184.2 L301.0 182.0 L297.8 180.5 L297.1 182.9 L295.6 182.8 L295.9 186.1 L291.7 185.6 L289.7 184.2 L287.5 185.7 L287.1 187.0 L285.3 187.2 L283.3 186.0 L283.0 188.2 L281.2 192.7 L284.1 195.2 L284.3 196.7 L282.4 196.5 L280.4 194.8 L278.8 195.7 L277.6 195.7 L275.6 193.7 L274.5 195.6 L273.2 196.7 L273.2 198.0 L269.7 198.2 L273.3 200.8 L273.7 202.2 L273.2 205.4 L269.9 204.3 L268.6 201.7 L267.7 203.7 L266.6 203.9 L266.7 205.9 L264.7 205.9 L262.6 208.0 L264.7 210.0 L267.6 210.3 L268.6 211.5 L268.6 213.2 L270.7 214.5 L271.2 216.2 L269.2 218.8 L269.3 220.8 L268.6 223.1 L269.3 224.6 L268.6 226.2 L270.0 230.9 L269.2 232.1 L266.9 233.6 L266.0 235.6 L266.8 238.9 L269.1 239.0 L270.1 237.3 L273.1 238.7 L274.6 240.8 L276.1 241.4 L277.2 240.0 L279.4 239.3 L282.3 240.8 L281.0 242.4 L282.6 244.8 L282.8 246.2 L281.7 246.9 L279.7 245.4 L277.5 246.3 L276.7 247.5 L278.3 250.9 L277.6 253.3 L276.0 254.3 L275.3 256.6 L275.6 259.2 L273.5 260.9 L272.0 260.6 L271.0 262.1 L268.9 263.7 L267.0 262.1 L262.8 263.3 L261.8 264.5 L257.3 262.7 L255.3 262.7 L254.6 260.4 L253.6 259.9 L251.6 262.0 L251.2 260.4 L249.9 259.2 L248.4 256.7 L248.3 255.6 L246.1 252.8 L247.1 250.1 L246.3 246.8 L246.7 244.6 L245.3 243.1 L242.9 242.5 L241.5 241.5 L240.4 242.3 L238.4 242.6 L237.9 240.5 L238.8 237.8 L239.1 233.3 L241.1 229.7 L240.9 228.0 L243.4 226.8 L242.4 224.7 L240.2 224.6 L239.2 225.9 L238.1 223.5 L239.2 221.9 L237.4 221.1 L235.3 221.8 L233.9 221.2 L231.3 221.3 L231.4 218.6 L230.7 217.8 L231.6 217.5 L231.8 214.6 L231.2 212.9 L229.8 212.8 L228.9 211.1 L226.1 210.8 L225.1 209.0 L223.8 208.8 L223.2 205.6 L221.5 203.7 L222.1 201.9 L223.2 201.4 L223.7 199.2 L222.0 198.3 L223.8 196.9 L223.8 195.3 L225.1 194.2 L226.4 194.2 L226.0 192.2 L230.1 191.6 L230.8 192.8 L232.0 191.8 L232.0 190.3 L230.7 189.1 L231.2 188.0 L229.6 186.2 L227.6 184.8 L225.8 184.6 L226.0 182.2 L223.6 181.4 L223.8 179.2 L222.3 178.4 L223.9 174.9 L226.6 173.4 L227.1 172.6 L229.4 172.7 L231.2 171.2 L229.9 169.5 L230.6 168.2 L233.4 167.8 L235.7 166.0 L235.6 163.7 L237.9 162.7 L238.9 163.3 L240.2 162.3 L243.2 163.7 L244.3 163.4 L244.2 161.8 L247.0 159.6 L249.4 158.6 L249.9 154.2 L253.8 154.8 L256.3 150.0 L257.0 150.1 L257.8 147.4 L258.6 146.8 L258.3 147.4 L259.1 150.7 L260.2 152.6 L261.9 153.8 L263.9 153.6 L267.7 152.7 L268.5 151.9 L270.8 153.1 L272.4 151.8 L273.6 149.5 L272.4 145.9 L274.5 143.8 L277.4 142.7 L280.1 144.1 L280.2 145.1 L281.7 146.9 L281.0 148.2 L281.8 149.5 L284.9 149.0 L287.5 147.6 L288.6 146.3 L290.9 146.9 L292.3 146.6 L292.4 145.2 L294.5 143.7 L296.1 144.5 L296.7 145.7 L298.7 145.7 L300.0 147.6 L303.6 146.1 L305.1 146.9 L304.5 148.7 L300.5 151.2 L299.6 152.3 L300.3 153.6 L301.9 154.5 L304.8 153.3 L305.3 152.5 L310.4 153.6 L310.1 155.4 L312.2 157.0 L316.0 157.2 L317.2 156.2 L319.2 156.9 L319.4 157.9 L321.3 159.2 L323.2 159.1 L325.5 160.3 L328.4 160.6 L330.3 161.6 Z","강원":"M386.8 153.7 L384.8 153.8 L382.0 155.4 L381.2 156.8 L379.5 156.5 L379.0 158.0 L377.7 158.6 L375.8 160.8 L376.3 163.6 L373.4 164.0 L369.1 160.0 L365.5 158.2 L364.0 158.9 L363.0 161.4 L356.6 159.7 L354.8 160.4 L353.5 158.7 L351.7 159.0 L349.7 163.6 L348.0 163.6 L345.7 162.9 L344.2 160.3 L342.7 160.4 L340.9 159.4 L339.3 161.7 L338.2 162.4 L339.0 164.5 L338.2 165.2 L336.9 164.1 L334.1 164.0 L333.2 162.8 L330.3 161.6 L328.4 160.6 L325.5 160.3 L323.2 159.1 L321.3 159.2 L319.4 157.9 L319.2 156.9 L317.2 156.2 L316.0 157.2 L312.2 157.0 L310.1 155.4 L310.4 153.6 L305.3 152.5 L304.8 153.3 L301.9 154.5 L300.3 153.6 L299.6 152.3 L300.5 151.2 L304.5 148.7 L305.1 146.9 L303.6 146.1 L300.0 147.6 L298.7 145.7 L296.7 145.7 L296.1 144.5 L294.5 143.7 L292.4 145.2 L292.3 146.6 L290.9 146.9 L288.6 146.3 L287.5 147.6 L284.9 149.0 L281.8 149.5 L281.0 148.2 L281.7 146.9 L280.2 145.1 L280.1 144.1 L277.4 142.7 L274.5 143.8 L272.4 145.9 L273.6 149.5 L272.4 151.8 L270.8 153.1 L268.5 151.9 L267.7 152.7 L263.9 153.6 L261.9 153.8 L260.2 152.6 L259.1 150.7 L258.3 147.4 L258.6 146.8 L258.7 143.8 L259.5 142.7 L259.2 138.8 L260.3 137.9 L259.6 135.7 L259.6 132.1 L261.0 131.6 L261.0 129.9 L262.3 126.5 L263.1 126.0 L262.5 122.6 L260.7 119.9 L260.7 118.4 L263.3 115.6 L266.1 115.2 L266.7 113.8 L263.8 112.7 L262.2 110.7 L260.1 110.9 L259.1 110.0 L255.5 110.6 L254.6 109.2 L251.1 107.1 L249.1 105.1 L247.1 104.2 L245.3 106.0 L243.7 106.5 L241.9 105.0 L243.2 103.2 L243.0 100.9 L243.9 97.4 L242.2 97.6 L239.6 96.5 L242.5 93.6 L240.7 90.5 L241.8 88.8 L241.0 87.4 L241.6 85.6 L243.9 84.2 L245.7 82.3 L247.0 82.4 L248.3 79.2 L248.0 76.0 L247.2 74.5 L242.5 73.2 L242.8 72.2 L242.1 70.0 L239.1 70.1 L236.8 69.5 L235.7 68.5 L234.5 64.3 L234.8 63.1 L234.3 59.5 L233.5 58.8 L232.1 60.1 L231.3 59.1 L229.8 58.9 L224.8 60.8 L224.0 58.7 L221.8 58.7 L221.2 56.7 L222.1 55.2 L222.3 52.8 L220.8 52.3 L219.6 54.1 L217.1 55.7 L214.4 54.4 L213.6 52.0 L212.5 50.5 L212.8 49.1 L212.2 47.3 L211.1 46.3 L209.7 47.3 L208.1 46.4 L208.4 44.1 L208.0 41.5 L210.2 39.8 L210.7 37.9 L212.0 37.4 L213.8 39.0 L215.0 38.9 L218.7 36.9 L219.9 37.6 L222.7 38.0 L224.0 39.1 L226.2 37.6 L226.9 37.9 L230.1 36.8 L233.0 37.4 L235.0 39.0 L237.0 38.9 L237.9 40.4 L239.7 40.3 L242.3 38.2 L246.0 36.8 L247.5 36.7 L250.0 37.9 L254.1 37.5 L254.8 36.5 L257.2 37.0 L258.6 36.0 L261.0 35.4 L263.0 38.2 L266.2 37.8 L269.5 36.4 L272.7 37.1 L276.8 38.7 L283.7 39.4 L290.6 35.7 L295.7 32.7 L297.9 30.7 L298.4 29.7 L301.0 27.5 L302.5 23.9 L303.6 14.8 L303.3 12.1 L304.1 10.4 L306.5 10.0 L310.1 14.6 L310.8 17.1 L312.2 18.9 L312.2 20.5 L313.5 23.3 L315.7 25.9 L314.8 26.4 L315.0 28.0 L316.0 29.9 L319.5 33.7 L320.4 37.0 L322.3 39.3 L323.7 43.8 L325.4 46.4 L325.1 47.5 L326.0 50.7 L326.9 52.1 L327.0 55.3 L329.0 58.7 L331.5 61.1 L332.4 63.6 L334.3 66.1 L336.2 67.7 L337.0 69.6 L339.9 74.5 L341.3 75.5 L341.3 76.5 L344.8 80.1 L344.5 81.4 L348.2 85.8 L348.3 86.8 L356.9 95.6 L359.0 98.6 L362.4 101.8 L362.4 103.3 L361.4 105.0 L362.2 107.2 L367.2 111.6 L367.6 113.4 L366.9 115.2 L367.6 117.0 L370.6 121.3 L372.8 123.4 L373.6 127.3 L375.4 129.1 L377.8 130.7 L377.8 132.4 L379.1 134.4 L379.3 136.4 L381.9 138.2 L381.8 139.3 L384.0 140.5 L383.8 142.0 L386.2 144.9 L385.0 145.9 L385.5 147.2 L384.9 149.0 L385.0 150.6 L386.8 153.7 Z","경기":"M168.3 137.7 L166.3 139.1 L165.3 140.6 L167.4 142.3 L168.3 142.2 L169.4 144.8 L171.6 145.9 L171.4 147.4 L168.6 146.6 L167.9 147.7 L166.5 146.4 L165.1 148.0 L163.2 147.8 L163.0 146.0 L164.5 144.3 L164.7 142.9 L163.6 140.6 L165.1 140.4 L166.0 139.0 L168.3 137.7 Z M258.6 146.8 L257.8 147.4 L257.0 150.1 L256.3 150.0 L253.8 154.8 L249.9 154.2 L249.4 158.6 L247.0 159.6 L244.2 161.8 L244.3 163.4 L243.2 163.7 L240.2 162.3 L238.9 163.3 L237.9 162.7 L235.6 163.7 L235.7 166.0 L233.4 167.8 L230.6 168.2 L229.9 169.5 L231.2 171.2 L229.4 172.7 L227.1 172.6 L226.6 173.4 L223.9 174.9 L222.3 178.4 L220.8 176.5 L218.7 176.1 L216.8 174.8 L215.4 172.7 L214.4 172.6 L210.8 170.8 L209.7 171.4 L208.3 170.7 L205.2 174.0 L204.2 173.9 L201.9 175.0 L199.0 174.3 L192.1 177.3 L191.8 175.2 L190.4 174.3 L188.6 174.6 L188.4 173.0 L187.2 172.0 L185.5 169.3 L185.4 168.4 L183.3 167.2 L182.6 165.1 L179.6 165.1 L179.4 163.2 L180.4 161.3 L181.1 157.9 L180.2 157.2 L181.0 155.5 L183.1 155.4 L183.9 153.2 L182.7 150.8 L181.8 151.9 L179.3 151.8 L177.8 154.4 L174.7 156.6 L173.4 154.5 L174.2 153.4 L172.5 152.1 L172.9 147.6 L173.8 146.1 L172.8 144.8 L174.5 142.3 L178.3 143.5 L180.1 143.0 L182.7 144.1 L182.7 141.8 L185.5 139.7 L183.8 139.0 L181.3 139.7 L177.6 138.4 L177.4 137.3 L175.0 135.3 L174.7 133.8 L175.6 133.2 L178.5 129.3 L179.8 126.6 L181.0 126.2 L181.8 123.9 L181.0 121.8 L178.9 120.3 L179.1 117.7 L180.3 117.4 L180.9 113.7 L181.2 114.3 L185.3 115.1 L185.8 116.4 L184.6 119.7 L185.3 121.4 L186.6 121.4 L188.9 119.6 L191.6 125.5 L193.5 124.1 L194.6 125.3 L196.4 124.8 L199.6 122.2 L200.2 123.4 L202.3 123.3 L202.2 124.8 L203.5 126.0 L204.6 126.0 L207.1 123.1 L208.7 122.7 L211.0 121.3 L212.1 119.0 L210.4 118.2 L212.3 114.6 L213.5 114.5 L213.8 113.1 L213.1 111.2 L207.4 113.2 L207.4 110.8 L208.7 108.8 L207.9 104.9 L206.7 104.4 L206.9 100.5 L205.8 99.8 L203.3 100.6 L200.6 99.4 L200.0 101.0 L198.8 101.7 L197.7 103.9 L198.2 105.6 L197.4 106.2 L195.2 103.5 L192.4 104.9 L191.5 108.0 L191.6 109.7 L189.5 111.2 L187.5 111.6 L185.1 110.1 L183.9 108.9 L183.0 111.1 L179.0 109.9 L177.6 110.0 L175.5 107.5 L172.2 105.5 L170.5 106.5 L169.8 108.6 L168.3 108.9 L165.5 110.4 L164.0 108.3 L163.6 106.6 L162.0 104.1 L162.5 102.8 L161.5 101.8 L161.9 99.2 L161.2 98.2 L161.8 95.7 L161.9 94.7 L160.9 92.9 L162.6 92.4 L164.1 92.7 L165.0 94.0 L168.4 94.3 L170.7 91.8 L172.6 90.6 L173.5 86.6 L172.4 85.9 L174.9 83.1 L173.3 81.2 L173.8 80.1 L172.8 77.8 L173.4 74.4 L174.8 75.6 L176.7 76.0 L179.1 74.8 L178.7 72.8 L180.6 71.5 L181.9 71.8 L183.2 70.7 L185.8 70.8 L185.3 68.9 L186.0 66.8 L187.7 67.0 L189.2 68.3 L189.9 66.3 L190.9 65.1 L190.9 62.8 L188.8 62.2 L187.5 60.8 L185.7 62.4 L185.2 61.5 L183.2 62.0 L182.3 60.4 L179.4 57.6 L181.1 54.9 L185.5 50.7 L189.3 48.2 L191.1 50.1 L193.5 50.2 L195.6 49.5 L196.6 50.7 L198.1 49.3 L197.4 47.2 L198.6 46.9 L201.4 44.9 L204.9 43.6 L208.0 41.5 L208.4 44.1 L208.1 46.4 L209.7 47.3 L211.1 46.3 L212.2 47.3 L212.8 49.1 L212.5 50.5 L213.6 52.0 L214.4 54.4 L217.1 55.7 L219.6 54.1 L220.8 52.3 L222.3 52.8 L222.1 55.2 L221.2 56.7 L221.8 58.7 L224.0 58.7 L224.8 60.8 L229.8 58.9 L231.3 59.1 L232.1 60.1 L233.5 58.8 L234.3 59.5 L234.8 63.1 L234.5 64.3 L235.7 68.5 L236.8 69.5 L239.1 70.1 L242.1 70.0 L242.8 72.2 L242.5 73.2 L247.2 74.5 L248.0 76.0 L248.3 79.2 L247.0 82.4 L245.7 82.3 L243.9 84.2 L241.6 85.6 L241.0 87.4 L241.8 88.8 L240.7 90.5 L242.5 93.6 L239.6 96.5 L242.2 97.6 L243.9 97.4 L243.0 100.9 L243.2 103.2 L241.9 105.0 L243.7 106.5 L245.3 106.0 L247.1 104.2 L249.1 105.1 L251.1 107.1 L254.6 109.2 L255.5 110.6 L259.1 110.0 L260.1 110.9 L262.2 110.7 L263.8 112.7 L266.7 113.8 L266.1 115.2 L263.3 115.6 L260.7 118.4 L260.7 119.9 L262.5 122.6 L263.1 126.0 L262.3 126.5 L261.0 129.9 L261.0 131.6 L259.6 132.1 L259.6 135.7 L260.3 137.9 L259.2 138.8 L259.5 142.7 L258.7 143.8 L258.6 146.8 Z","세종":"M222.0 198.3 L223.7 199.2 L223.2 201.4 L222.1 201.9 L221.5 203.7 L223.2 205.6 L223.8 208.8 L225.1 209.0 L226.1 210.8 L228.9 211.1 L229.8 212.8 L231.2 212.9 L231.8 214.6 L231.6 217.5 L230.7 217.8 L229.6 216.9 L227.8 218.4 L228.0 219.8 L227.3 222.1 L225.3 224.6 L222.7 224.6 L221.7 225.3 L219.8 225.9 L217.2 224.6 L215.3 222.6 L215.6 220.9 L212.9 215.8 L213.8 214.8 L213.0 213.4 L214.7 210.6 L214.7 209.0 L213.8 207.6 L211.7 206.6 L211.9 203.7 L211.6 200.8 L212.4 199.5 L212.1 198.2 L210.7 198.2 L210.0 196.7 L212.3 194.1 L215.5 194.9 L219.0 197.9 L222.0 198.3 Z","울산":"M393.6 300.1 L392.9 302.1 L394.6 304.7 L394.8 306.5 L393.8 307.8 L394.2 309.1 L393.2 312.7 L392.7 316.3 L388.4 317.3 L385.6 319.9 L386.8 320.6 L386.7 323.6 L385.3 327.0 L386.4 329.0 L383.5 329.9 L382.0 331.6 L380.1 330.4 L380.4 328.3 L378.9 326.0 L375.2 326.7 L374.0 325.8 L375.3 323.8 L373.5 320.8 L372.0 321.5 L370.6 321.2 L369.0 319.9 L366.6 316.8 L366.4 315.4 L359.7 312.4 L357.5 312.0 L355.6 308.9 L357.5 308.1 L359.5 306.6 L360.0 305.0 L359.6 303.6 L358.2 303.1 L361.7 300.2 L363.8 301.1 L363.3 299.3 L363.4 297.2 L364.9 295.1 L368.6 294.1 L369.5 292.9 L370.6 293.8 L374.3 293.2 L376.5 294.9 L378.0 295.1 L378.7 296.1 L378.1 298.6 L378.5 299.7 L381.9 300.3 L386.0 297.3 L390.6 298.8 L393.6 300.1 Z","대전":"M238.4 242.6 L236.4 244.0 L236.5 244.9 L234.5 246.9 L231.7 245.1 L231.1 243.1 L230.0 241.4 L230.2 240.0 L228.9 239.2 L227.9 240.1 L228.3 244.4 L227.3 245.2 L226.4 247.4 L225.0 246.0 L224.3 244.2 L221.8 242.8 L221.6 239.9 L219.1 238.2 L219.9 236.9 L219.9 233.9 L221.4 231.7 L220.8 230.5 L221.6 229.2 L221.7 225.3 L222.7 224.6 L225.3 224.6 L227.3 222.1 L228.0 219.8 L227.8 218.4 L229.6 216.9 L230.7 217.8 L231.4 218.6 L231.3 221.3 L233.9 221.2 L235.3 221.8 L237.4 221.1 L239.2 221.9 L238.1 223.5 L239.2 225.9 L240.2 224.6 L242.4 224.7 L243.4 226.8 L240.9 228.0 L241.1 229.7 L239.1 233.3 L238.8 237.8 L237.9 240.5 L238.4 242.6 Z","광주":"M192.0 338.5 L193.9 339.2 L194.0 340.3 L197.4 345.5 L199.5 345.4 L201.0 347.4 L200.0 348.6 L200.1 351.6 L198.4 354.6 L196.7 355.0 L195.5 356.7 L194.0 356.5 L193.2 355.0 L189.2 356.5 L187.9 356.2 L185.0 358.7 L183.1 357.8 L181.8 358.6 L180.5 354.9 L178.8 353.4 L174.5 352.9 L173.8 353.4 L171.7 352.0 L171.9 347.7 L173.3 347.2 L172.4 345.0 L173.8 344.9 L174.5 342.7 L175.8 343.5 L177.0 343.0 L177.1 341.6 L178.5 339.2 L180.6 338.9 L180.0 340.9 L183.9 342.4 L186.6 341.3 L189.4 339.3 L190.6 339.6 L192.0 338.5 Z","인천":"M126.4 157.4 L127.1 158.7 L126.0 159.8 L124.8 158.6 L126.4 157.4 Z M127.8 149.7 L129.0 151.3 L127.5 151.6 L127.8 149.7 Z M142.9 141.3 L145.2 142.3 L144.2 143.2 L142.4 142.2 L142.9 141.3 Z M128.6 141.3 L129.5 142.7 L131.6 144.6 L132.8 145.0 L131.3 147.0 L129.4 147.5 L129.0 146.2 L127.3 145.5 L127.2 143.8 L128.6 141.3 Z M157.4 139.8 L158.9 140.3 L159.8 142.7 L158.3 143.5 L156.4 145.9 L154.3 145.0 L154.8 141.3 L157.4 139.8 Z M152.7 127.7 L155.0 130.2 L154.6 131.7 L152.8 132.1 L151.7 128.7 L152.7 127.7 Z M165.9 118.9 L166.5 120.0 L165.0 121.0 L163.1 121.2 L160.3 122.4 L159.4 124.1 L155.1 126.8 L153.3 126.7 L153.0 125.7 L151.4 124.3 L149.6 124.2 L148.3 122.3 L149.7 121.8 L154.3 118.7 L156.9 119.1 L158.4 118.6 L159.6 115.9 L161.8 116.4 L164.9 117.6 L165.9 118.9 Z M156.7 114.7 L157.6 115.4 L157.1 118.0 L154.3 116.5 L156.7 114.7 Z M144.5 113.1 L148.7 116.0 L146.1 116.4 L146.1 115.0 L144.5 113.1 Z M183.0 111.1 L180.9 113.7 L180.3 117.4 L179.1 117.7 L178.9 120.3 L181.0 121.8 L181.8 123.9 L181.0 126.2 L179.8 126.6 L178.5 129.3 L177.9 130.0 L172.5 134.4 L169.0 134.4 L168.6 131.4 L167.5 130.3 L167.5 126.1 L167.1 122.6 L168.0 119.4 L167.9 116.3 L168.1 113.7 L167.1 113.2 L165.5 110.4 L168.3 108.9 L169.8 108.6 L170.5 106.5 L172.2 105.5 L175.5 107.5 L177.6 110.0 L179.0 109.9 L183.0 111.1 Z M138.5 103.7 L140.2 103.9 L139.6 106.2 L137.9 104.5 L138.5 103.7 Z M97.5 101.4 L97.1 102.8 L94.9 104.0 L95.0 101.3 L97.5 101.4 Z M135.6 100.5 L136.8 102.7 L136.3 103.7 L134.1 102.4 L135.6 100.5 Z M146.1 94.6 L145.5 97.9 L147.5 99.5 L149.6 99.9 L149.9 102.6 L147.3 105.0 L145.8 105.2 L146.0 103.2 L145.2 101.2 L142.7 99.8 L141.5 98.6 L142.7 97.7 L143.0 95.1 L146.1 94.6 Z M141.1 88.1 L143.3 89.2 L146.1 89.2 L146.7 89.8 L145.2 92.2 L143.2 93.2 L141.6 92.6 L139.7 93.1 L138.1 94.3 L136.5 92.8 L137.7 90.6 L137.8 89.1 L138.9 88.1 L141.1 88.1 Z M161.8 95.7 L161.2 98.2 L161.9 99.2 L161.5 101.8 L162.5 102.8 L162.0 104.1 L162.1 105.5 L163.5 108.8 L161.6 109.6 L161.0 111.3 L159.8 110.2 L158.2 110.9 L157.6 109.5 L154.6 110.0 L152.1 109.8 L150.0 108.3 L149.6 106.0 L152.2 104.3 L150.7 100.4 L148.0 98.9 L147.3 97.4 L147.1 94.7 L148.2 93.7 L147.7 90.5 L149.6 89.1 L151.3 87.2 L154.7 86.6 L156.9 89.2 L160.4 91.3 L160.7 93.2 L161.8 95.7 Z M17.6 85.1 L18.7 85.1 L18.7 88.1 L17.9 89.0 L15.7 89.1 L15.4 87.5 L17.6 85.1 Z M15.9 71.9 L17.5 71.6 L19.4 72.2 L19.5 74.6 L17.7 75.6 L16.7 78.3 L12.0 77.6 L10.0 73.9 L10.3 72.3 L12.1 73.1 L15.9 71.9 Z","대구":"M320.4 297.0 L319.0 297.8 L318.7 301.2 L317.1 301.6 L314.0 301.3 L312.8 302.8 L308.9 304.4 L308.0 304.0 L309.2 303.9 L310.6 301.0 L308.9 299.7 L306.8 297.1 L306.5 295.0 L307.1 294.5 L311.7 296.0 L313.0 295.0 L312.9 292.8 L309.8 290.8 L309.3 289.1 L310.9 285.8 L311.9 284.6 L315.8 284.7 L316.5 282.8 L315.1 281.4 L312.1 280.5 L309.5 280.6 L309.2 279.1 L310.6 276.8 L311.8 273.6 L313.6 272.3 L316.3 272.2 L315.7 275.1 L316.3 276.2 L317.7 276.1 L320.1 274.0 L321.0 271.8 L320.4 268.3 L322.7 268.8 L325.4 268.0 L327.6 265.3 L333.4 264.5 L336.1 265.4 L336.6 267.4 L337.8 268.8 L337.2 270.2 L337.7 271.4 L337.2 272.9 L338.6 274.2 L339.1 277.3 L338.2 279.9 L334.8 282.9 L335.4 284.9 L332.7 286.5 L333.8 289.6 L333.5 292.1 L332.8 293.1 L331.3 293.3 L329.2 294.7 L328.0 294.9 L327.0 292.8 L327.5 291.6 L324.6 291.5 L321.7 293.4 L320.4 297.0 Z","부산":"M382.0 331.6 L378.9 332.6 L378.5 336.3 L377.2 337.9 L378.0 339.7 L376.4 342.8 L375.7 345.6 L373.7 346.3 L373.3 348.0 L368.7 348.8 L367.5 350.7 L368.0 353.0 L367.6 354.0 L365.4 354.1 L363.2 353.3 L363.1 351.8 L361.9 351.7 L361.1 353.2 L363.3 354.4 L364.2 356.8 L365.5 357.9 L364.5 358.9 L360.7 355.5 L359.7 357.7 L358.0 359.1 L356.5 359.1 L355.3 360.6 L354.0 356.2 L351.6 355.4 L350.9 356.0 L344.8 356.0 L346.0 358.7 L346.0 360.5 L344.9 362.6 L342.5 361.8 L343.0 359.9 L341.8 358.5 L343.7 357.9 L344.5 356.7 L343.8 354.1 L345.4 353.3 L344.6 351.1 L342.2 349.9 L341.6 348.4 L345.5 348.3 L347.3 347.5 L348.5 346.0 L347.6 344.1 L348.7 342.9 L351.8 342.7 L357.7 340.9 L358.9 337.1 L361.8 336.4 L362.7 334.9 L363.7 335.4 L365.0 334.1 L366.8 333.6 L368.0 330.0 L369.7 328.2 L371.7 329.4 L373.2 328.5 L374.0 325.8 L375.2 326.7 L378.9 326.0 L380.4 328.3 L380.1 330.4 L382.0 331.6 Z","서울":"M180.9 113.7 L183.0 111.1 L183.9 108.9 L185.1 110.1 L187.5 111.6 L189.5 111.2 L191.6 109.7 L191.5 108.0 L192.4 104.9 L195.2 103.5 L197.4 106.2 L198.2 105.6 L197.7 103.9 L198.8 101.7 L200.0 101.0 L200.6 99.4 L203.3 100.6 L205.8 99.8 L206.9 100.5 L206.7 104.4 L207.9 104.9 L208.7 108.8 L207.4 110.8 L207.4 113.2 L213.1 111.2 L213.8 113.1 L213.5 114.5 L212.3 114.6 L210.4 118.2 L212.1 119.0 L211.0 121.3 L208.7 122.7 L207.1 123.1 L204.6 126.0 L203.5 126.0 L202.2 124.8 L202.3 123.3 L200.2 123.4 L199.6 122.2 L196.4 124.8 L194.6 125.3 L193.5 124.1 L191.6 125.5 L188.9 119.6 L186.6 121.4 L185.3 121.4 L184.6 119.7 L185.8 116.4 L185.3 115.1 L181.2 114.3 L180.9 113.7 Z"},"centroids":{"제주":[164.0,522.0],"경남":[299.0,328.0],"경북":[337.4,232.2],"전남":[195.9,369.6],"전북":[211.2,293.8],"충남":[187.9,213.9],"충북":[265.3,193.6],"강원":[302.1,96.5],"경기":[213.5,114.3],"세종":[219.9,211.1],"울산":[376.9,309.6],"대전":[230.6,232.7],"광주":[186.4,348.6],"인천":[173.7,119.9],"대구":[323.5,282.6],"부산":[362.7,344.3],"서울":[198.8,114.0]}};
+
+/* 통합 대시보드에서 두 시트를 함께 필터링하기 위한 공유 상태 */
+const sharedState = {
+  regions: new Set(), distributors: new Set(), estTypes: new Set(), schoolLevels: new Set(),
+  types: new Set(), purchaseStatuses: new Set(), products: new Set(),
+  dateStart:'', dateEnd:''
+};
+let mapYear = '2025';
+
+function ymInRangeShared(yms){
+  if(!sharedState.dateStart && !sharedState.dateEnd) return true;
+  return (yms||[]).some(ym => ym && (!sharedState.dateStart || ym>=sharedState.dateStart) && (!sharedState.dateEnd || ym<=sharedState.dateEnd));
+}
+function sharedCommonChecks(row, isSchool, opts){
+  opts = opts || {};
+  if(sharedState.regions.size && !sharedState.regions.has(row.region)) return false;
+  if(sharedState.distributors.size && !sharedState.distributors.has(row.distributor)) return false;
+  if(sharedState.estTypes.size && !sharedState.estTypes.has(row.estType)) return false;
+  if(sharedState.schoolLevels.size && !sharedState.schoolLevels.has(row.schoolLevel)) return false;
+  if(sharedState.types.size){
+    const t = row['type'+mapYear];
+    if(!sharedState.types.has(t)) return false;
+  }
+  if(!opts.skipPurchase && sharedState.purchaseStatuses.size){
+    const label = row['purchase'+mapYear] === '구매' ? '구매' : '미구매';
+    if(!sharedState.purchaseStatuses.has(label)) return false;
+  }
+  if(sharedState.products.size){
+    if(isSchool){
+      const prods = row.txProducts || [];
+      if(!prods.some(p=>sharedState.products.has(p))) return false;
+    } else {
+      if(!sharedState.products.has(row.product)) return false;
+    }
+  }
+  if(!ymInRangeShared(isSchool ? row.txYms : [row.ym])) return false;
+  return true;
+}
+function sharedSchoolPredicate(row){ return sharedCommonChecks(row, true); }
+function sharedTxPredicate(row){ return sharedCommonChecks(row, false); }
+// 지도·구매율 통계 전용: "연도별 구입구분" 필터는 제외한다.
+// (이 필터를 포함하면 "구매"만 걸러놓고 구매율을 다시 계산하는 순환 참조가 되어 항상 100%가 나옴)
+function sharedSchoolStatsPool(){
+  return schoolData.filter(row => sharedCommonChecks(row, true, {skipPurchase:true}));
+}
+
+let schoolData = [];
+let txData = [];
+
+/* ============================================================
+   유틸
+   ============================================================ */
+function parseAmount(v){
+  if(v===undefined || v===null || v==='') return 0;
+  const n = parseFloat(String(v).replace(/[^0-9.\-]/g,''));
+  return isNaN(n) ? 0 : n;
+}
+function fmtNum(n){ return (n||0).toLocaleString('ko-KR'); }
+function fmtMoney(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+async function fetchCSV(url){
+  const res = await fetch(url, {cache:'no-store'});
+  if(!res.ok) throw new Error('네트워크 응답 오류 (' + res.status + ')');
+  const text = await res.text();
+  const parsed = Papa.parse(text, {skipEmptyLines:false});
+  return parsed.data;
+}
+
+/* ============================================================
+   DB(학교 현황) 파싱
+   ============================================================ */
+function parseSchoolRows(rows){
+  const headerIdx = rows.findIndex(r => r[0] && r[0].trim() === '학교급');
+  if(headerIdx === -1) return [];
+  const out = [];
+  for(let i=headerIdx+1; i<rows.length; i++){
+    const r = rows[i];
+    if(!r || r.length < 7) continue;
+    const code = (r[6]||'').trim();
+    const name = (r[4]||'').trim();
+    if(!code && !name) continue;
+    const purchase2025 = (r[9]||'').trim();
+    const purchase2026 = (r[12]||'').trim();
+    out.push({
+      schoolLevel:(r[0]||'').trim(),
+      region:(r[1]||'').trim(),
+      district:(r[2]||'').trim(),
+      estType:(r[3]||'').trim(),
+      schoolName:name,
+      groupKey:(r[5]||'').trim(),
+      code,
+      distributor:(r[7]||'').trim(),
+      type2025:(r[8]||'').trim(),
+      purchase2025: purchase2025 === '구매' ? '구매' : '',
+      purchaseLabel2025: purchase2025 === '구매' ? '구매' : '미구매',
+      amount2025: parseAmount(r[10]),
+      type2026:(r[11]||'').trim(),
+      purchase2026: purchase2026 === '구매' ? '구매' : '',
+      purchaseLabel2026: purchase2026 === '구매' ? '구매' : '미구매',
+      amount2026: parseAmount(r[13]),
+    });
+  }
+  return out;
+}
+
+/* ============================================================
+   구매현황(거래 내역) 파싱
+   ============================================================ */
+function parseTxRows(rows){
+  const headerIdx = rows.findIndex(r => r[2] && r[2].trim() === '매출년월');
+  if(headerIdx === -1) return [];
+  const out = [];
+  for(let i=headerIdx+1; i<rows.length; i++){
+    const r = rows[i];
+    if(!r || r.length < 10) continue;
+    const ym = (r[2]||'').trim();
+    if(!ym) continue;
+    out.push({
+      ym,
+      category:(r[3]||'').trim(),
+      product:(r[4]||'').trim(),
+      seats:(r[5]||'').trim(),
+      region:(r[6]||'').trim(),
+      custType:(r[7]||'').trim(),
+      customer:(r[8]||'').trim(),
+      groupKey:(r[9]||'').trim(),
+      code:(r[10]||'').trim(),
+      qty:(r[11]||'').trim(),
+      months:(r[12]||'').trim(),
+      pm:(r[13]||'').trim(),
+      unitPrice:parseAmount(r[14]),
+      supplyAmount:parseAmount(r[15]),
+      channelFee:parseAmount(r[16]),
+      feeVat:parseAmount(r[17]),
+      settleAmount:parseAmount(r[18]),
+      depositDate:(r[19]||'').trim(),
+      receiptType:(r[20]||'').trim(),
+      issueDate:(r[21]||'').trim(),
+      channel:(r[22]||'').trim(),
+      note:(r[23]||'').trim(),
+      settleTarget:(r[24]||'').trim(),
+      yearCategory:(r[25]||'').trim(),
+    });
+  }
+  return out;
+}
+
+/* ============================================================
+   공통 필터/테이블 엔진
+   ============================================================ */
+function makeController(cfg){
+  // cfg: {data, filters:[{key,label}], searchInputId, searchFields, columns, sortDefault, kpisEl, filterBarEl, countEl, pagerEl, tableEl}
+  const state = { selected:{}, search:'', sortKey: cfg.sortDefault.key, sortDir: cfg.sortDefault.dir, page:1, dateStart:'', dateEnd:'' };
+  cfg.filters.forEach(f => state.selected[f.key] = new Set());
+
+  function uniqueValues(key){
+    const map = new Map();
+    cfg.data.forEach(row => {
+      const v = row[key] === '' ? '(미지정)' : row[key];
+      map.set(v, (map.get(v)||0)+1);
+    });
+    return Array.from(map.entries()).sort((a,b)=> b[1]-a[1]);
+  }
+
+  function buildFilterBar(){
+    const bar = cfg.filterBarEl;
+    // remove old filter items (keep search box)
+    bar.querySelectorAll('.filter-item').forEach(n=>n.remove());
+    cfg.filters.forEach(f=>{
+      const item = document.createElement('div');
+      item.className = 'filter-item';
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn';
+      btn.type = 'button';
+      btn.innerHTML = esc(f.label) + (state.selected[f.key].size ? ' <span class="count">'+state.selected[f.key].size+'</span>' : '');
+      const panel = document.createElement('div');
+      panel.className = 'filter-panel';
+
+      const actions = document.createElement('div');
+      actions.className = 'fp-actions';
+      const selAllA = document.createElement('a'); selAllA.textContent='전체 선택';
+      const clearA = document.createElement('a'); clearA.textContent='선택 해제';
+      actions.appendChild(selAllA); actions.appendChild(clearA);
+      panel.appendChild(actions);
+
+      const values = uniqueValues(f.key);
+      values.forEach(([val,n])=>{
+        const label = document.createElement('label');
+        const cb = document.createElement('input');
+        cb.type='checkbox';
+        cb.checked = state.selected[f.key].has(val);
+        cb.addEventListener('change', ()=>{
+          if(cb.checked) state.selected[f.key].add(val); else state.selected[f.key].delete(val);
+          state.page = 1;
+          refreshAll();
+        });
+        label.appendChild(cb);
+        const span = document.createElement('span'); span.textContent = val;
+        label.appendChild(span);
+        const nSpan = document.createElement('span'); nSpan.className='n'; nSpan.textContent = n;
+        label.appendChild(nSpan);
+        panel.appendChild(label);
+      });
+
+      selAllA.addEventListener('click', ()=>{
+        values.forEach(([val])=> state.selected[f.key].add(val));
+        state.page=1; buildFilterBar(); refreshAll();
+      });
+      clearA.addEventListener('click', ()=>{
+        state.selected[f.key].clear();
+        state.page=1; buildFilterBar(); refreshAll();
+      });
+
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        document.querySelectorAll('.filter-panel.open').forEach(p=>{ if(p!==panel) p.classList.remove('open'); });
+        panel.classList.toggle('open');
+      });
+      if(state.selected[f.key].size) btn.classList.add('on');
+
+      item.appendChild(btn);
+      item.appendChild(panel);
+      bar.appendChild(item);
+    });
+
+    // clear-all link
+    let clearAll = bar.querySelector('.clear-all');
+    if(!clearAll){
+      clearAll = document.createElement('span');
+      clearAll.className='clear-all';
+      clearAll.textContent='필터 초기화';
+      clearAll.addEventListener('click', ()=>{
+        cfg.filters.forEach(f=>state.selected[f.key].clear());
+        state.search=''; document.getElementById(cfg.searchInputId).value='';
+        state.dateStart=''; state.dateEnd='';
+        if(cfg.dateStartId){ document.getElementById(cfg.dateStartId).value=''; document.getElementById(cfg.dateEndId).value=''; }
+        state.page=1;
+        buildFilterBar(); refreshAll();
+      });
+      bar.appendChild(clearAll);
+    }
+  }
+
+  if(cfg.dateStartId){
+    const startEl = document.getElementById(cfg.dateStartId);
+    const endEl = document.getElementById(cfg.dateEndId);
+    startEl.addEventListener('change', ()=>{ state.dateStart = startEl.value; state.page=1; refreshAll(); });
+    endEl.addEventListener('change', ()=>{ state.dateEnd = endEl.value; state.page=1; refreshAll(); });
+  }
+
+  function applyFilters(){
+    const s = state.search.toLowerCase();
+    return cfg.data.filter(row=>{
+      if(cfg.externalPredicate && !cfg.externalPredicate(row)) return false;
+      for(const f of cfg.filters){
+        const sel = state.selected[f.key];
+        if(sel.size){
+          const v = row[f.key]==='' ? '(미지정)' : row[f.key];
+          if(!sel.has(v)) return false;
+        }
+      }
+      if(s){
+        const hay = cfg.searchFields.map(k=>String(row[k]||'').toLowerCase()).join(' ');
+        if(!hay.includes(s)) return false;
+      }
+      if(cfg.getYms && (state.dateStart || state.dateEnd)){
+        const yms = cfg.getYms(row) || [];
+        const inRange = yms.some(ym => ym && (!state.dateStart || ym>=state.dateStart) && (!state.dateEnd || ym<=state.dateEnd));
+        if(!inRange) return false;
+      }
+      return true;
+    });
+  }
+
+  function sortRows(rows){
+    const key = state.sortKey, dir = state.sortDir;
+    const col = cfg.columns.find(c=>c.key===key);
+    const isNum = col && col.numeric;
+    return rows.slice().sort((a,b)=>{
+      let av=a[key], bv=b[key];
+      if(isNum){ av=Number(av)||0; bv=Number(bv)||0; return dir==='asc'? av-bv : bv-av; }
+      av=String(av||''); bv=String(bv||'');
+      return dir==='asc' ? av.localeCompare(bv,'ko') : bv.localeCompare(av,'ko');
+    });
+  }
+
+  function renderTable(rows){
+    const table = cfg.tableEl;
+    const thead = table.querySelector('thead tr');
+    thead.innerHTML='';
+    cfg.columns.forEach(col=>{
+      const th = document.createElement('th');
+      let arrow='';
+      if(state.sortKey===col.key) arrow = state.sortDir==='asc' ? '▲' : '▼';
+      th.innerHTML = esc(col.label) + (arrow? ' <span class="arrow">'+arrow+'</span>':'');
+      th.addEventListener('click', ()=>{
+        if(state.sortKey===col.key){ state.sortDir = state.sortDir==='asc'?'desc':'asc'; }
+        else { state.sortKey = col.key; state.sortDir = col.numeric ? 'desc':'asc'; }
+        refreshAll();
+      });
+      thead.appendChild(th);
+    });
+
+    const tbody = table.querySelector('tbody');
+    tbody.innerHTML='';
+    const start = (state.page-1)*PAGE_SIZE;
+    const pageRows = rows.slice(start, start+PAGE_SIZE);
+    if(pageRows.length===0){
+      const tr=document.createElement('tr');
+      const td=document.createElement('td');
+      td.colSpan = cfg.columns.length;
+      td.className='state-msg';
+      td.textContent='조건에 맞는 결과가 없습니다.';
+      tr.appendChild(td); tbody.appendChild(tr);
+    }
+    pageRows.forEach(row=>{
+      const tr = document.createElement('tr');
+      cfg.columns.forEach(col=>{
+        const td = document.createElement('td');
+        if(col.numeric) td.className='num';
+        td.innerHTML = col.render ? col.render(row) : esc(row[col.key]);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderPager(totalRows){
+    const totalPages = Math.max(1, Math.ceil(totalRows/PAGE_SIZE));
+    if(state.page>totalPages) state.page = totalPages;
+    const pager = cfg.pagerEl;
+    pager.innerHTML='';
+    const mkBtn=(label,disabled,fn)=>{
+      const b=document.createElement('button'); b.textContent=label; b.disabled=disabled;
+      b.addEventListener('click', fn); return b;
+    };
+    pager.appendChild(mkBtn('처음', state.page<=1, ()=>{state.page=1; refreshAll();}));
+    pager.appendChild(mkBtn('이전', state.page<=1, ()=>{state.page--; refreshAll();}));
+    const span=document.createElement('span'); span.textContent = state.page + ' / ' + totalPages; pager.appendChild(span);
+    pager.appendChild(mkBtn('다음', state.page>=totalPages, ()=>{state.page++; refreshAll();}));
+    pager.appendChild(mkBtn('마지막', state.page>=totalPages, ()=>{state.page=totalPages; refreshAll();}));
+  }
+
+  function refreshAll(){
+    let rows = applyFilters();
+    cfg.countEl.textContent = rows.length.toLocaleString('ko-KR') + '건 (전체 ' + cfg.data.length.toLocaleString('ko-KR') + '건 중)';
+    rows = sortRows(rows);
+    renderPager(rows.length);
+    renderTable(rows);
+    if(cfg.renderKpis) cfg.renderKpis(applyFilters());
+    // refresh filter button states (counts) without rebuilding panels open state loss on every keystroke
+    cfg.filterBarEl.querySelectorAll('.filter-item').forEach((item,idx)=>{
+      const f = cfg.filters[idx];
+      const btn = item.querySelector('.filter-btn');
+      const n = state.selected[f.key].size;
+      btn.classList.toggle('on', !!n);
+      const countSpan = btn.querySelector('.count');
+      if(n){
+        if(countSpan) countSpan.textContent = n; else btn.innerHTML = esc(f.label)+' <span class="count">'+n+'</span>';
+      } else if(countSpan){ countSpan.remove(); }
+    });
+  }
+
+  document.getElementById(cfg.searchInputId).addEventListener('input', (e)=>{
+    state.search = e.target.value;
+    state.page = 1;
+    refreshAll();
+  });
+
+  buildFilterBar();
+  refreshAll();
+
+  return { refreshAll, buildFilterBar };
+}
+
+/* close open filter panels on outside click */
+document.addEventListener('click', ()=>{
+  document.querySelectorAll('.filter-panel.open').forEach(p=>p.classList.remove('open'));
+});
+
+/* ============================================================
+   KPI 렌더러
+   ============================================================ */
+function renderSchoolKpis(rows){
+  const total = rows.length;
+  const buy25 = rows.filter(r=>r.purchase2025==='구매').length;
+  const buy26 = rows.filter(r=>r.purchase2026==='구매').length;
+  const amt25 = rows.reduce((s,r)=>s+r.amount2025,0);
+  const amt26 = rows.reduce((s,r)=>s+r.amount2026,0);
+  const el = document.getElementById('schoolKpis');
+  el.innerHTML = `
+    <div class="kpi"><div class="label">표시된 학교 수</div><div class="value">${fmtNum(total)}</div></div>
+    <div class="kpi accent"><div class="label">2025 구매 학교</div><div class="value">${fmtNum(buy25)}</div><div class="sub">${total? (buy25/total*100).toFixed(1):0}%</div></div>
+    <div class="kpi accent"><div class="label">2026 구매 학교</div><div class="value">${fmtNum(buy26)}</div><div class="sub">${total? (buy26/total*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="label">2025 구입금액 합계</div><div class="value" style="font-size:16px">${fmtMoney(amt25)}</div></div>
+    <div class="kpi"><div class="label">2026 구입금액 합계</div><div class="value" style="font-size:16px">${fmtMoney(amt26)}</div></div>
+  `;
+}
+function renderTxKpis(rows){
+  const total = rows.length;
+  const supply = rows.reduce((s,r)=>s+r.supplyAmount,0);
+  const settle = rows.reduce((s,r)=>s+r.settleAmount,0);
+  const schools = new Set(rows.filter(r=>r.code).map(r=>r.code)).size;
+  const el = document.getElementById('txKpis');
+  el.innerHTML = `
+    <div class="kpi"><div class="label">표시된 거래 건수</div><div class="value">${fmtNum(total)}</div></div>
+    <div class="kpi"><div class="label">거래 학교/거래처 수</div><div class="value">${fmtNum(schools)}</div></div>
+    <div class="kpi accent"><div class="label">공급가액 합계</div><div class="value" style="font-size:16px">${fmtMoney(supply)}</div></div>
+    <div class="kpi"><div class="label">정산액 합계</div><div class="value" style="font-size:16px">${fmtMoney(settle)}</div></div>
+  `;
+}
+
+/* ============================================================
+   초기화
+   ============================================================ */
+function setSync(state, msg){
+  const dot = document.getElementById('syncDot');
+  const text = document.getElementById('syncText');
+  dot.className = 'sync-dot' + (state==='loading' ? ' loading' : state==='err' ? ' err' : '');
+  text.textContent = msg;
+}
+
+async function loadAll(){
+  setSync('loading', '불러오는 중…');
+  try{
+    const [dbRows, txRows] = await Promise.all([fetchCSV(DB_CSV_URL), fetchCSV(TX_CSV_URL)]);
+    schoolData = parseSchoolRows(dbRows);
+    txData = parseTxRows(txRows);
+
+    // 학교코드로 두 시트 연결: 구매내역에 학교 속성 붙이고, 학교현황에 거래월·상품군 목록 붙이기
+    const codeToSchool = new Map();
+    schoolData.forEach(s => { if(s.code) codeToSchool.set(s.code, s); });
+    const codeToYms = new Map();
+    const codeToProducts = new Map();
+    txData.forEach(t => {
+      const school = t.code ? codeToSchool.get(t.code) : null;
+      t.distributor = school ? (school.distributor || '(미지정)') : '(미매칭)';
+      t.estType = school ? school.estType : '';
+      t.schoolLevel = school ? school.schoolLevel : '';
+      t.type2025 = school ? school.type2025 : '';
+      t.type2026 = school ? school.type2026 : '';
+      t.purchase2025 = school ? school.purchase2025 : '';
+      t.purchase2026 = school ? school.purchase2026 : '';
+      if(t.code && t.code !== '#N/A'){
+        if(!codeToYms.has(t.code)) codeToYms.set(t.code, new Set());
+        codeToYms.get(t.code).add(t.ym);
+        if(t.product){
+          if(!codeToProducts.has(t.code)) codeToProducts.set(t.code, new Set());
+          codeToProducts.get(t.code).add(t.product);
+        }
+      }
+    });
+    schoolData.forEach(s => {
+      s.txYms = (s.code && codeToYms.has(s.code)) ? Array.from(codeToYms.get(s.code)) : [];
+      s.txProducts = (s.code && codeToProducts.has(s.code)) ? Array.from(codeToProducts.get(s.code)) : [];
+    });
+
+    if(schoolData.length===0 && txData.length===0){
+      throw new Error('시트에서 데이터를 찾지 못했습니다. 시트 구조가 변경되었을 수 있습니다.');
+    }
+
+    buildSchoolTable();
+    buildTxTable();
+    buildMergedDashboard();
+    buildInsightDashboard();
+
+    const now = new Date();
+    setSync('ok', '동기화 완료 · ' + now.toLocaleTimeString('ko-KR'));
+  }catch(err){
+    console.error(err);
+    setSync('err', '불러오기 실패: ' + err.message);
+    document.getElementById('schoolCount').innerHTML =
+      '<span class="state-msg err">데이터를 불러오지 못했습니다. 시트가 "웹에 게시" 상태인지, 네트워크가 연결되어 있는지 확인해주세요.<br><code>' + esc(err.message) + '</code></span>';
+  }
+}
+
+let schoolCtl=null, txCtl=null;
+
+function buildSchoolTable(){
+  const columns = [
+    {key:'schoolLevel', label:'학교급'},
+    {key:'region', label:'지역'},
+    {key:'district', label:'교육지원청명'},
+    {key:'estType', label:'설립구분'},
+    {key:'schoolName', label:'학교명'},
+    {key:'code', label:'정보공시코드'},
+    {key:'distributor', label:'총판명'},
+    {key:'type2025', label:"'25 유형"},
+    {key:'purchaseLabel2025', label:"'25 구매여부", render:r=>`<span class="badge ${r.purchase2025==='구매'?'buy':'miss'}">${r.purchaseLabel2025}</span>`},
+    {key:'amount2025', label:"'25 구입금액", numeric:true, render:r=>fmtNum(r.amount2025)},
+    {key:'type2026', label:"'26 유형"},
+    {key:'purchaseLabel2026', label:"'26 구매여부", render:r=>`<span class="badge ${r.purchase2026==='구매'?'buy':'miss'}">${r.purchaseLabel2026}</span>`},
+    {key:'amount2026', label:"'26 구입금액", numeric:true, render:r=>fmtNum(r.amount2026)},
+  ];
+  const filters = [
+    {key:'schoolLevel', label:'학교급'},
+    {key:'region', label:'지역'},
+    {key:'district', label:'교육지원청명'},
+    {key:'estType', label:'설립구분'},
+    {key:'distributor', label:'총판명'},
+    {key:'type2025', label:"'25 유형구분"},
+    {key:'purchaseLabel2025', label:"'25 구매여부"},
+    {key:'type2026', label:"'26 유형구분"},
+    {key:'purchaseLabel2026', label:"'26 구매여부"},
+  ];
+  schoolCtl = makeController({
+    data: schoolData,
+    filters,
+    columns,
+    searchInputId:'schoolSearch',
+    searchFields:['schoolName','code','groupKey'],
+    sortDefault:{key:'schoolName', dir:'asc'},
+    filterBarEl: document.getElementById('schoolFilterBar'),
+    countEl: document.getElementById('schoolCount'),
+    pagerEl: document.getElementById('schoolPager'),
+    tableEl: document.getElementById('schoolTable'),
+    renderKpis: renderSchoolKpis,
+    getYms: row => row.txYms,
+    dateStartId: 'schoolDateStart',
+    dateEndId: 'schoolDateEnd',
+  });
+}
+
+function buildTxTable(){
+  const columns = [
+    {key:'ym', label:'매출년월'},
+    {key:'category', label:'구분'},
+    {key:'product', label:'구매상품'},
+    {key:'region', label:'지역'},
+    {key:'custType', label:'구분'},
+    {key:'customer', label:'거래처'},
+    {key:'code', label:'정보공시코드'},
+    {key:'distributor', label:'총판명'},
+    {key:'schoolLevel', label:'학교급'},
+    {key:'estType', label:'설립구분'},
+    {key:'qty', label:'구매수량', numeric:true},
+    {key:'months', label:'기간(개월)'},
+    {key:'pm', label:'PM'},
+    {key:'supplyAmount', label:'공급가액', numeric:true, render:r=>fmtNum(r.supplyAmount)},
+    {key:'settleAmount', label:'정산액', numeric:true, render:r=>fmtNum(r.settleAmount)},
+    {key:'receiptType', label:'증빙유형'},
+    {key:'channel', label:'거래경로'},
+    {key:'yearCategory', label:'연도구분'},
+  ];
+  const filters = [
+    {key:'ym', label:'매출년월'},
+    {key:'category', label:'구분'},
+    {key:'product', label:'구매상품'},
+    {key:'region', label:'지역'},
+    {key:'schoolLevel', label:'학교급'},
+    {key:'estType', label:'설립구분'},
+    {key:'custType', label:'구분(학교/이외/기관)'},
+    {key:'distributor', label:'총판명'},
+    {key:'pm', label:'PM'},
+    {key:'receiptType', label:'증빙유형'},
+    {key:'channel', label:'거래경로'},
+    {key:'yearCategory', label:'연도구분'},
+  ];
+  txCtl = makeController({
+    data: txData,
+    filters,
+    columns,
+    searchInputId:'txSearch',
+    searchFields:['customer','code','groupKey','note'],
+    sortDefault:{key:'ym', dir:'desc'},
+    filterBarEl: document.getElementById('txFilterBar'),
+    countEl: document.getElementById('txCount'),
+    pagerEl: document.getElementById('txPager'),
+    tableEl: document.getElementById('txTable'),
+    renderKpis: renderTxKpis,
+    getYms: row => [row.ym],
+    dateStartId: 'txDateStart',
+    dateEndId: 'txDateEnd',
+  });
+}
+
+/* ============================================================
+   통합 대시보드
+   ============================================================ */
+let mergedSchoolCtl=null, mergedTxCtl=null;
+
+function regionRateStats(year){
+  const key = year==='2026' ? 'purchase2026' : 'purchase2025';
+  const rows = sharedSchoolStatsPool();
+  const stats = {}; // region -> {total, buy}
+  rows.forEach(r=>{
+    if(!r.region) return;
+    if(!stats[r.region]) stats[r.region] = {total:0, buy:0};
+    stats[r.region].total++;
+    if(r[key]==='구매') stats[r.region].buy++;
+  });
+  return stats;
+}
+
+function colorForRate(rate){
+  // rate: 0~1, null이면 데이터 없음 → 중립 회색
+  if(rate===null) return '#E5E9EF';
+  // 너무 쨍하지 않은 중간 채도의 앰버 스케일 (연한 크림 → 은은한 진한 앰버)
+  const stops = [
+    [250,244,229], // 0%
+    [244,222,177], // 25%
+    [231,179,104],  // 50%
+    [214,143,66],  // 75%
+    [185,106,46],   // 100%
+  ];
+  const t = Math.max(0, Math.min(1, rate)) * (stops.length-1);
+  const i = Math.min(stops.length-2, Math.floor(t));
+  const f = t - i;
+  const mix = (a,b)=> Math.round(a + (b-a)*f);
+  const c0 = stops[i], c1 = stops[i+1];
+  return `rgb(${mix(c0[0],c1[0])},${mix(c0[1],c1[1])},${mix(c0[2],c1[2])})`;
+}
+
+const SMALL_REGIONS = new Set(['서울','인천','대전','대구','광주','울산','세종','부산']);
+
+function renderRegionMap(){
+  const svg = document.getElementById('koreaMap');
+  svg.setAttribute('viewBox', `0 0 ${KOREA_MAP.W} ${KOREA_MAP.H}`);
+  svg.innerHTML='';
+  const stats = regionRateStats(mapYear);
+  const tooltip = document.getElementById('mapTooltip');
+
+  Object.keys(KOREA_MAP.paths).forEach(region=>{
+    const d = KOREA_MAP.paths[region];
+    const st = stats[region];
+    const rate = st && st.total ? st.buy/st.total : null;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', colorForRate(rate));
+    path.addEventListener('mousemove', (e)=>{
+      const wrap = svg.parentElement.getBoundingClientRect();
+      tooltip.style.display='block';
+      tooltip.style.left = (e.clientX - wrap.left + 12) + 'px';
+      tooltip.style.top = (e.clientY - wrap.top + 8) + 'px';
+      const pct = rate===null ? '데이터 없음' : (rate*100).toFixed(1)+'%';
+      tooltip.innerHTML = `<strong>${region}</strong> · ${mapYear} 구매율 ${pct}` + (st? ` (${st.buy}/${st.total}교)` : '');
+    });
+    path.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+    svg.appendChild(path);
+  });
+
+  // 17개 시도 전부 라벨 표시. 면적이 작은 수도권/광역시는 글자 크기만 줄여서 표기하고,
+  // 정확한 %는 겹침 없이 툴팁과 옆 순위 리스트에서 확인하도록 분리했다.
+  Object.keys(KOREA_MAP.paths).forEach(region=>{
+    const c = KOREA_MAP.centroids[region];
+    if(!c) return;
+    const small = SMALL_REGIONS.has(region);
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', c[0]); text.setAttribute('y', c[1]);
+    text.setAttribute('class', small ? 'region-label-sm' : 'region-label-lg');
+    text.textContent = region;
+    svg.appendChild(text);
+  });
+
+  // 옆 순위 리스트: 모든 지역을 구매율 순으로 표시 (지도 안에서 생략된 %는 여기서 정확히 확인 가능)
+  const list = document.getElementById('regionRankList');
+  const order = Object.keys(KOREA_MAP.paths).map(region=>{
+    const st = stats[region];
+    const rate = st && st.total ? st.buy/st.total : null;
+    return {region, rate, st};
+  }).sort((a,b)=>{
+    if(a.rate===null && b.rate===null) return 0;
+    if(a.rate===null) return 1;
+    if(b.rate===null) return -1;
+    return b.rate - a.rate;
+  });
+  list.innerHTML = order.map(o=>{
+    const pct = o.rate===null ? '<span class="rpct na">데이터 없음</span>' : `<span class="rpct">${(o.rate*100).toFixed(1)}%</span>`;
+    const detail = o.st ? `<span class="rdetail">${o.st.buy}/${o.st.total}</span>` : '';
+    return `<li><span class="swatch" style="background:${colorForRate(o.rate)}"></span><span class="rname">${esc(o.region)}</span>${detail}${pct}</li>`;
+  }).join('');
+}
+
+function renderMergedKpis(){
+  const key = 'purchase'+mapYear;
+  const typeKey = 'type'+mapYear;
+  const amtKey = 'amount'+mapYear;
+  const statsPool = sharedSchoolStatsPool(); // "연도별 구입구분" 필터는 배제한 순수 모수
+  const txRows = txData.filter(sharedTxPredicate);
+
+  const total = statsPool.length;
+  const buy = statsPool.filter(r=>r[key]==='구매').length;
+  const amt = statsPool.reduce((s,r)=>s+r[amtKey],0);
+
+  const general = statsPool.filter(r=>r[typeKey]==='일반');
+  const generalBuy = general.filter(r=>r[key]==='구매').length;
+  const leading = statsPool.filter(r=>r[typeKey]==='선도학교');
+  const leadingBuy = leading.filter(r=>r[key]==='구매').length;
+
+  const supply = txRows.reduce((s,r)=>s+r.supplyAmount,0);
+
+  const el = document.getElementById('mergedKpis');
+  el.innerHTML = `
+    <div class="kpi"><div class="label">전체 학교 수 (${mapYear} 기준)</div><div class="value">${fmtNum(total)}</div></div>
+    <div class="kpi accent"><div class="label">구입 학교 수 / 전체 학교 수</div><div class="value">${fmtNum(buy)} / ${fmtNum(total)}</div><div class="sub">${total? (buy/total*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="label">일반학교 수</div><div class="value">${fmtNum(general.length)}</div><div class="sub">구입 ${fmtNum(generalBuy)}교 · ${general.length? (generalBuy/general.length*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="label">선도학교 수</div><div class="value">${fmtNum(leading.length)}</div><div class="sub">구입 ${fmtNum(leadingBuy)}교 · ${leading.length? (leadingBuy/leading.length*100).toFixed(1):0}%</div></div>
+    <div class="kpi"><div class="label">${mapYear} 구입금액 합계</div><div class="value" style="font-size:16px">${fmtMoney(amt)}</div></div>
+    <div class="kpi"><div class="label">관련 거래 건수 · 공급가액</div><div class="value" style="font-size:16px">${fmtNum(txRows.length)}건 · ${fmtMoney(supply)}</div></div>
+  `;
+}
+
+function refreshMerged(){
+  renderRegionMap();
+  renderMergedKpis();
+  if(mergedSchoolCtl) mergedSchoolCtl.refreshAll();
+  if(mergedTxCtl) mergedTxCtl.refreshAll();
+}
+
+function buildSharedFilterPanel(panelEl, values, selectedSet, onChange){
+  panelEl.innerHTML='';
+  const actions = document.createElement('div'); actions.className='fp-actions';
+  const selAllA = document.createElement('a'); selAllA.textContent='전체 선택';
+  const clearA = document.createElement('a'); clearA.textContent='선택 해제';
+  actions.appendChild(selAllA); actions.appendChild(clearA);
+  panelEl.appendChild(actions);
+  values.forEach(val=>{
+    const label=document.createElement('label');
+    const cb=document.createElement('input'); cb.type='checkbox'; cb.checked=selectedSet.has(val);
+    cb.addEventListener('change', ()=>{ if(cb.checked) selectedSet.add(val); else selectedSet.delete(val); onChange(); });
+    label.appendChild(cb);
+    const span=document.createElement('span'); span.textContent=val; label.appendChild(span);
+    panelEl.appendChild(label);
+  });
+  selAllA.addEventListener('click', ()=>{ values.forEach(v=>selectedSet.add(v)); buildSharedFilterPanel(panelEl, values, selectedSet, onChange); onChange(); });
+  clearA.addEventListener('click', ()=>{ selectedSet.clear(); buildSharedFilterPanel(panelEl, values, selectedSet, onChange); onChange(); });
+}
+
+function buildMergedDashboard(){
+  // 지역/총판/설립구분/상품군 체크박스 패널 (연도와 무관, 최초 1회 구성)
+  const regionValues = Array.from(new Set(schoolData.map(r=>r.region).filter(Boolean))).sort();
+  const distValues = Array.from(new Set(schoolData.map(r=>r.distributor).filter(Boolean))).sort();
+  const estValues = Array.from(new Set(schoolData.map(r=>r.estType).filter(Boolean))).sort();
+  const levelValues = Array.from(new Set(schoolData.map(r=>r.schoolLevel).filter(Boolean))).sort();
+  const productValues = Array.from(new Set(txData.map(r=>r.product).filter(Boolean))).sort();
+  const purchaseValues = ['구매', '미구매'];
+
+  const onSharedChange = ()=>{
+    document.getElementById('mergedRegionBtn').classList.toggle('on', sharedState.regions.size>0);
+    document.getElementById('mergedDistBtn').classList.toggle('on', sharedState.distributors.size>0);
+    document.getElementById('mergedEstBtn').classList.toggle('on', sharedState.estTypes.size>0);
+    document.getElementById('mergedLevelBtn').classList.toggle('on', sharedState.schoolLevels.size>0);
+    document.getElementById('mergedTypeBtn').classList.toggle('on', sharedState.types.size>0);
+    document.getElementById('mergedProductBtn').classList.toggle('on', sharedState.products.size>0);
+    document.getElementById('mergedPurchaseBtn').classList.toggle('on', sharedState.purchaseStatuses.size>0);
+    refreshMerged(); refreshInsight();
+  };
+
+  buildSharedFilterPanel(document.getElementById('mergedRegionPanel'), regionValues, sharedState.regions, onSharedChange);
+  buildSharedFilterPanel(document.getElementById('mergedDistPanel'), distValues, sharedState.distributors, onSharedChange);
+  buildSharedFilterPanel(document.getElementById('mergedEstPanel'), estValues, sharedState.estTypes, onSharedChange);
+  buildSharedFilterPanel(document.getElementById('mergedLevelPanel'), levelValues, sharedState.schoolLevels, onSharedChange);
+  buildSharedFilterPanel(document.getElementById('mergedProductPanel'), productValues, sharedState.products, onSharedChange);
+  buildSharedFilterPanel(document.getElementById('mergedPurchasePanel'), purchaseValues, sharedState.purchaseStatuses, onSharedChange);
+
+  function rebuildTypePanel(){
+    const typeValues = Array.from(new Set(schoolData.map(r=>r['type'+mapYear]).filter(Boolean))).sort();
+    buildSharedFilterPanel(document.getElementById('mergedTypePanel'), typeValues, sharedState.types, onSharedChange);
+  }
+  rebuildTypePanel();
+
+  [['mergedRegionBtn','mergedRegionPanel'], ['mergedDistBtn','mergedDistPanel'], ['mergedEstBtn','mergedEstPanel'],
+   ['mergedLevelBtn','mergedLevelPanel'], ['mergedTypeBtn','mergedTypePanel'], ['mergedProductBtn','mergedProductPanel'],
+   ['mergedPurchaseBtn','mergedPurchasePanel']
+  ].forEach(([btnId, panelId])=>{
+    document.getElementById(btnId).addEventListener('click', (e)=>{
+      e.stopPropagation();
+      document.querySelectorAll('.filter-panel.open').forEach(p=>{ if(p.id!==panelId) p.classList.remove('open'); });
+      document.getElementById(panelId).classList.toggle('open');
+    });
+  });
+
+  document.getElementById('mergedDateStart').addEventListener('change', e=>{ sharedState.dateStart=e.target.value; refreshMerged(); refreshInsight(); });
+  document.getElementById('mergedDateEnd').addEventListener('change', e=>{ sharedState.dateEnd=e.target.value; refreshMerged(); refreshInsight(); });
+
+  document.getElementById('mergedClearAll').addEventListener('click', ()=>{
+    Object.values(sharedState).forEach(v=>{ if(v instanceof Set) v.clear(); });
+    sharedState.dateStart=''; sharedState.dateEnd='';
+    document.getElementById('mergedDateStart').value=''; document.getElementById('mergedDateEnd').value='';
+    buildSharedFilterPanel(document.getElementById('mergedRegionPanel'), regionValues, sharedState.regions, onSharedChange);
+    buildSharedFilterPanel(document.getElementById('mergedDistPanel'), distValues, sharedState.distributors, onSharedChange);
+    buildSharedFilterPanel(document.getElementById('mergedEstPanel'), estValues, sharedState.estTypes, onSharedChange);
+    buildSharedFilterPanel(document.getElementById('mergedLevelPanel'), levelValues, sharedState.schoolLevels, onSharedChange);
+    buildSharedFilterPanel(document.getElementById('mergedProductPanel'), productValues, sharedState.products, onSharedChange);
+    buildSharedFilterPanel(document.getElementById('mergedPurchasePanel'), purchaseValues, sharedState.purchaseStatuses, onSharedChange);
+    rebuildTypePanel();
+    document.querySelectorAll('#mergedFilterBar .filter-btn').forEach(b=>b.classList.remove('on'));
+    refreshMerged(); refreshInsight();
+  });
+
+  document.querySelectorAll('.yr-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.yr-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      mapYear = btn.dataset.yr;
+      sharedState.types.clear();
+      document.getElementById('mergedTypeBtn').classList.remove('on');
+      rebuildTypePanel();
+      refreshMerged(); refreshInsight();
+    });
+  });
+
+  // 학교 목록 (통합) - 컬럼은 학교현황보다 축약
+  mergedSchoolCtl = makeController({
+    data: schoolData,
+    filters: [],
+    columns: [
+      {key:'schoolName', label:'학교명'},
+      {key:'region', label:'지역'},
+      {key:'schoolLevel', label:'학교급'},
+      {key:'estType', label:'설립구분'},
+      {key:'distributor', label:'총판명'},
+      {key:'purchaseLabel2025', label:"'25", render:r=>`<span class="badge ${r.purchase2025==='구매'?'buy':'miss'}">${r.purchaseLabel2025}</span>`},
+      {key:'purchaseLabel2026', label:"'26", render:r=>`<span class="badge ${r.purchase2026==='구매'?'buy':'miss'}">${r.purchaseLabel2026}</span>`},
+    ],
+    searchInputId:'mergedSchoolSearch',
+    searchFields:['schoolName','code'],
+    sortDefault:{key:'schoolName', dir:'asc'},
+    filterBarEl: document.createElement('div'), // 사용 안 함 (공유 필터로 대체)
+    countEl: document.getElementById('mergedSchoolCount'),
+    pagerEl: document.getElementById('mergedSchoolPager'),
+    tableEl: document.getElementById('mergedSchoolTable'),
+    externalPredicate: sharedSchoolPredicate,
+  });
+
+  // 구매 내역 (통합) - 컬럼 축약
+  mergedTxCtl = makeController({
+    data: txData,
+    filters: [],
+    columns: [
+      {key:'ym', label:'매출월'},
+      {key:'customer', label:'거래처'},
+      {key:'region', label:'지역'},
+      {key:'schoolLevel', label:'학교급'},
+      {key:'estType', label:'설립구분'},
+      {key:'distributor', label:'총판명'},
+      {key:'product', label:'구매상품'},
+      {key:'supplyAmount', label:'공급가액', numeric:true, render:r=>fmtNum(r.supplyAmount)},
+    ],
+    searchInputId:'mergedTxSearch',
+    searchFields:['customer','code'],
+    sortDefault:{key:'ym', dir:'desc'},
+    filterBarEl: document.createElement('div'),
+    countEl: document.getElementById('mergedTxCount'),
+    pagerEl: document.getElementById('mergedTxPager'),
+    tableEl: document.getElementById('mergedTxTable'),
+    externalPredicate: sharedTxPredicate,
+  });
+
+  refreshMerged(); refreshInsight();
+}
+
+/* ============================================================
+   분석 탭
+   ============================================================ */
+let trendMetric = 'supply';
+let churnCtl=null, newCtl=null, districtCtl=null;
+let churnCfg=null, newCfg=null, districtCfg=null;
+
+function monthlyTrendData(){
+  const rows = txData.filter(sharedTxPredicate);
+  const map = {};
+  rows.forEach(r=>{
+    if(!r.ym) return;
+    if(!map[r.ym]) map[r.ym] = {supply:0, count:0};
+    map[r.ym].supply += r.supplyAmount;
+    map[r.ym].count += 1;
+  });
+  return Object.keys(map).sort().map(ym=>({ym, supply:map[ym].supply, count:map[ym].count}));
+}
+
+function renderTrendChart(){
+  const svg = document.getElementById('trendChart');
+  if(!svg) return;
+  const data = monthlyTrendData();
+  svg.innerHTML = '';
+  const W=900, H=260, padL=60, padR=16, padT=16, padB=34;
+  const plotW = W-padL-padR, plotH = H-padT-padB;
+  if(data.length===0){
+    const t=document.createElementNS('http://www.w3.org/2000/svg','text');
+    t.setAttribute('x', W/2); t.setAttribute('y', H/2); t.setAttribute('text-anchor','middle');
+    t.setAttribute('class','axis-label'); t.textContent='표시할 데이터가 없습니다.';
+    svg.appendChild(t); return;
+  }
+  const values = data.map(d => trendMetric==='supply' ? d.supply : d.count);
+  const maxV = Math.max(1, ...values);
+  const barW = plotW / data.length;
+  const tooltip = document.getElementById('trendTooltip');
+
+  // 그리드 라인 4단
+  for(let i=0;i<=4;i++){
+    const y = padT + plotH - (plotH*i/4);
+    const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+    line.setAttribute('x1', padL); line.setAttribute('x2', W-padR);
+    line.setAttribute('y1', y); line.setAttribute('y2', y);
+    line.setAttribute('class','grid-line');
+    svg.appendChild(line);
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', padL-8); label.setAttribute('y', y+3);
+    label.setAttribute('text-anchor','end'); label.setAttribute('class','axis-label');
+    const v = maxV*i/4;
+    label.textContent = trendMetric==='supply' ? (v>=10000 ? Math.round(v/10000)+'만' : fmtNum(Math.round(v))) : fmtNum(Math.round(v));
+    svg.appendChild(label);
+  }
+
+  data.forEach((d,i)=>{
+    const v = trendMetric==='supply' ? d.supply : d.count;
+    const h = (v/maxV) * plotH;
+    const x = padL + i*barW + barW*0.15;
+    const y = padT + plotH - h;
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', x); rect.setAttribute('y', y);
+    rect.setAttribute('width', Math.max(1,barW*0.7)); rect.setAttribute('height', Math.max(0,h));
+    rect.style.fill = 'var(--navy)';
+    rect.setAttribute('rx', 2);
+    rect.addEventListener('mousemove', (e)=>{
+      const wrap = svg.parentElement.getBoundingClientRect();
+      tooltip.style.display='block';
+      tooltip.style.left = (e.clientX - wrap.left + 12) + 'px';
+      tooltip.style.top = (e.clientY - wrap.top + 8) + 'px';
+      tooltip.innerHTML = `<strong>${d.ym}</strong> · ${trendMetric==='supply' ? fmtMoney(d.supply) : fmtNum(d.count)+'건'}`;
+    });
+    rect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+    svg.appendChild(rect);
+
+    // x축 라벨: 데이터가 많으면 일부만 표시
+    const showEvery = Math.ceil(data.length/14);
+    if(i % showEvery === 0){
+      const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+      label.setAttribute('x', x+barW*0.35); label.setAttribute('y', H-padB+16);
+      label.setAttribute('text-anchor','middle'); label.setAttribute('class','axis-label');
+      label.textContent = d.ym.slice(2); // YY-MM
+      svg.appendChild(label);
+    }
+  });
+}
+
+function computeChurnNew(){
+  const key25='purchase2025', key26='purchase2026';
+  const pool = sharedSchoolStatsPool();
+  const churn = pool.filter(r=> r[key25]==='구매' && r[key26]!=='구매');
+  const fresh = pool.filter(r=> r[key25]!=='구매' && r[key26]==='구매');
+  return {churn, fresh};
+}
+
+function buildProductStats(){
+  const rows = txData.filter(sharedTxPredicate);
+  const map = {};
+  rows.forEach(r=>{
+    const p = r.product || '(미지정)';
+    if(!map[p]) map[p] = {supply:0, count:0};
+    map[p].supply += r.supplyAmount;
+    map[p].count += 1;
+  });
+  let arr = Object.keys(map).map(p=>({product:p, supply:map[p].supply, count:map[p].count}));
+  arr.sort((a,b)=> b.supply - a.supply);
+  const TOP=10;
+  if(arr.length>TOP){
+    const rest = arr.slice(TOP);
+    const restSum = rest.reduce((s,r)=>s+r.supply,0);
+    const restCount = rest.reduce((s,r)=>s+r.count,0);
+    arr = arr.slice(0,TOP);
+    arr.push({product:'기타', supply:restSum, count:restCount});
+  }
+  return arr;
+}
+
+function renderProductChart(){
+  const svg = document.getElementById('productChart');
+  const list = document.getElementById('productRankList');
+  if(!svg || !list) return;
+  const data = buildProductStats();
+  svg.innerHTML='';
+  const totalSupply = data.reduce((s,d)=>s+d.supply,0) || 1;
+
+  const W=700, rowH=26, padL=180, padR=90, padT=10;
+  const H = padT*2 + data.length*rowH;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const plotW = W-padL-padR;
+  const maxV = Math.max(1, ...data.map(d=>d.supply));
+  const tooltip = document.getElementById('productTooltip');
+
+  data.forEach((d,i)=>{
+    const y = padT + i*rowH;
+    const w = (d.supply/maxV) * plotW;
+    const label = document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x', padL-8); label.setAttribute('y', y+rowH*0.65);
+    label.setAttribute('text-anchor','end');
+    label.textContent = d.product.length>14 ? d.product.slice(0,13)+'…' : d.product;
+    svg.appendChild(label);
+
+    const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    rect.setAttribute('x', padL); rect.setAttribute('y', y+3);
+    rect.setAttribute('width', Math.max(1,w)); rect.setAttribute('height', rowH-8);
+    rect.setAttribute('rx', 3);
+    rect.setAttribute('fill', d.product==='기타' ? '#C7CDD6' : colorForRate(0.3 + 0.6*(d.supply/maxV)));
+    rect.addEventListener('mousemove', (e)=>{
+      const wrap = svg.parentElement.getBoundingClientRect();
+      tooltip.style.display='block';
+      tooltip.style.left = (e.clientX - wrap.left + 12) + 'px';
+      tooltip.style.top = (e.clientY - wrap.top + 8) + 'px';
+      tooltip.innerHTML = `<strong>${esc(d.product)}</strong> · ${fmtMoney(d.supply)} (${d.count}건)`;
+    });
+    rect.addEventListener('mouseleave', ()=>{ tooltip.style.display='none'; });
+    svg.appendChild(rect);
+
+    const valLabel = document.createElementNS('http://www.w3.org/2000/svg','text');
+    valLabel.setAttribute('x', padL+w+6); valLabel.setAttribute('y', y+rowH*0.65);
+    valLabel.textContent = (d.supply/totalSupply*100).toFixed(1)+'%';
+    valLabel.style.fontSize = '10.5px';
+    valLabel.style.fill = 'var(--muted)';
+    svg.appendChild(valLabel);
+  });
+
+  list.innerHTML = data.map(d=>{
+    const pct = (d.supply/totalSupply*100).toFixed(1)+'%';
+    return `<li><span class="swatch" style="background:${d.product==='기타'?'#C7CDD6':colorForRate(0.3+0.6*(d.supply/maxV))}"></span><span class="rname">${esc(d.product)}</span><span class="rdetail">${fmtMoney(d.supply)}</span><span class="rpct">${pct}</span></li>`;
+  }).join('');
+}
+
+function buildDistrictStats(){
+  const key = 'purchase'+mapYear;
+  const pool = sharedSchoolStatsPool();
+  const map = {};
+  pool.forEach(r=>{
+    if(!r.district) return;
+    const k = r.district;
+    if(!map[k]) map[k] = {district:k, region:r.region, total:0, buy:0};
+    map[k].total++;
+    if(r[key]==='구매') map[k].buy++;
+  });
+  return Object.values(map).map(d=>({...d, rate: d.total? d.buy/d.total*100 : 0}));
+}
+
+function buildInsightDashboard(){
+  document.querySelectorAll('.metric-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.metric-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      trendMetric = btn.dataset.metric;
+      renderTrendChart();
+    });
+  });
+
+  const churnNew = computeChurnNew();
+  churnCfg = {
+    data: churnNew.churn,
+    filters: [],
+    columns: [
+      {key:'schoolName', label:'학교명'}, {key:'region', label:'지역'}, {key:'schoolLevel', label:'학교급'},
+      {key:'distributor', label:'총판명'}, {key:'amount2025', label:"'25 구입금액", numeric:true, render:r=>fmtNum(r.amount2025)},
+    ],
+    searchInputId:'churnSearch_placeholder', searchFields:['schoolName','code'],
+    sortDefault:{key:'amount2025', dir:'desc'},
+    filterBarEl: document.createElement('div'),
+    countEl: document.getElementById('churnCount'), pagerEl: document.getElementById('churnPager'),
+    tableEl: document.getElementById('churnTable'),
+  };
+  newCfg = {
+    data: churnNew.fresh,
+    filters: [],
+    columns: [
+      {key:'schoolName', label:'학교명'}, {key:'region', label:'지역'}, {key:'schoolLevel', label:'학교급'},
+      {key:'distributor', label:'총판명'}, {key:'amount2026', label:"'26 구입금액", numeric:true, render:r=>fmtNum(r.amount2026)},
+    ],
+    searchInputId:'newSearch_placeholder', searchFields:['schoolName','code'],
+    sortDefault:{key:'amount2026', dir:'desc'},
+    filterBarEl: document.createElement('div'),
+    countEl: document.getElementById('newCount'), pagerEl: document.getElementById('newPager'),
+    tableEl: document.getElementById('newTable'),
+  };
+  // makeController가 검색창 id를 필수로 참조하므로 숨은 더미 input을 만들어 둔다
+  ['churnSearch_placeholder','newSearch_placeholder'].forEach(id=>{
+    if(!document.getElementById(id)){
+      const inp = document.createElement('input');
+      inp.type='text'; inp.id=id; inp.style.display='none';
+      document.body.appendChild(inp);
+    }
+  });
+  churnCtl = makeController(churnCfg);
+  newCtl = makeController(newCfg);
+
+  districtCfg = {
+    data: buildDistrictStats(),
+    filters: [],
+    columns: [
+      {key:'district', label:'교육지원청명'}, {key:'region', label:'지역'},
+      {key:'total', label:'전체 학교', numeric:true},
+      {key:'buy', label:'구입 학교', numeric:true},
+      {key:'rate', label:'구입률', numeric:true, render:r=>r.rate.toFixed(1)+'%'},
+    ],
+    searchInputId:'districtSearch', searchFields:['district','region'],
+    sortDefault:{key:'rate', dir:'desc'},
+    filterBarEl: document.createElement('div'),
+    countEl: document.getElementById('districtCount'), pagerEl: document.getElementById('districtPager'),
+    tableEl: document.getElementById('districtTable'),
+  };
+  districtCtl = makeController(districtCfg);
+
+  refreshInsight();
+}
+
+function refreshInsight(){
+  renderTrendChart();
+  const churnNew = computeChurnNew();
+  if(churnCfg){ churnCfg.data = churnNew.churn; document.getElementById('churnCountBadge').textContent = fmtNum(churnNew.churn.length)+'교'; if(churnCtl) churnCtl.refreshAll(); }
+  if(newCfg){ newCfg.data = churnNew.fresh; document.getElementById('newCountBadge').textContent = fmtNum(churnNew.fresh.length)+'교'; if(newCtl) newCtl.refreshAll(); }
+  renderProductChart();
+  if(districtCfg){ districtCfg.data = buildDistrictStats(); if(districtCtl) districtCtl.refreshAll(); }
+}
+
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+document.getElementById('refreshBtn').addEventListener('click', loadAll);
+
+loadAll();
+</script>
+
+<script>
+/* 교과서 점유율 탭: textbook_orders.json(같은 폴더)을 불러와 표시. 실패해도 다른 탭에는 영향 없음 */
+(function(){
+  const $ = id => document.getElementById(id);
+  const COLORS = ['#42618F','#CB9440','#6E9E8F','#B5644F','#8A7BB0','#5B8DB8','#D9B26F','#9AA5B4','#7C9A5F','#C98BA0','#4F7A8C','#A88B5E','#6B6F80'];
+  let pubs = [];
+  const pubColor = p => COLORS[Math.max(0, pubs.indexOf(p)) % COLORS.length];
+  function svgEl(t, a, txt){
+    const e = document.createElementNS('http://www.w3.org/2000/svg', t);
+    for(const k in a) e.setAttribute(k, a[k]);
+    if(txt != null) e.textContent = txt;
+    return e;
+  }
+  function tip(el, tipEl, html){
+    el.addEventListener('mousemove', ev => {
+      const w = el.ownerSVGElement.parentElement.getBoundingClientRect();
+      tipEl.style.display = 'block';
+      tipEl.style.left = (ev.clientX - w.left + 12) + 'px';
+      tipEl.style.top = (ev.clientY - w.top + 8) + 'px';
+      tipEl.innerHTML = html;
+    });
+    el.addEventListener('mouseleave', () => { tipEl.style.display = 'none'; });
+  }
+
+  function renderShare(list){
+    const T = list.reduce((s, r) => s + r.qty, 0);
+    const pct = v => (v / (T || 1) * 100).toFixed(1) + '%';
+    const byPub = new Map(), byReg = new Map(), sch = new Set();
+    list.forEach(r => {
+      sch.add(r.sid);
+      byPub.set(r.publisher, (byPub.get(r.publisher) || 0) + r.qty);
+      let m = byReg.get(r.region);
+      if(!m){ m = new Map(); byReg.set(r.region, m); }
+      m.set(r.publisher, (m.get(r.publisher) || 0) + r.qty);
+    });
+    const pubArr = Array.from(byPub).sort((a, b) => b[1] - a[1]);
+
+    $('shareKpis').innerHTML = `
+      <div class="kpi accent"><div class="label">총 주문부수</div><div class="value">${fmtNum(T)}</div></div>
+      <div class="kpi"><div class="label">학교 수</div><div class="value">${fmtNum(sch.size)}</div></div>
+      <div class="kpi"><div class="label">1위 출판사</div><div class="value" style="font-size:18px">${pubArr.length ? esc(pubArr[0][0]) : '-'}</div><div class="sub">${pubArr.length ? pct(pubArr[0][1]) : ''}</div></div>`;
+
+    /* 출판사별 점유율 */
+    const svg = $('sharePubChart'); svg.innerHTML = '';
+    const W = 700, rowH = 26, padL = 90, padR = 60, padT = 8, H = padT * 2 + Math.max(1, pubArr.length) * rowH;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const pw = W - padL - padR, max = pubArr.length ? pubArr[0][1] : 1;
+    pubArr.forEach(([p, v], i) => {
+      const y = padT + i * rowH, w = Math.max(1, v / max * pw);
+      svg.appendChild(svgEl('text', {x: padL - 8, y: y + rowH * 0.65, 'text-anchor': 'end'}, p));
+      const rc = svgEl('rect', {x: padL, y: y + 3, width: w, height: rowH - 8, rx: 3, fill: pubColor(p)});
+      tip(rc, $('shareTip1'), `<strong>${esc(p)}</strong> · ${fmtNum(v)}부 (${pct(v)})`);
+      svg.appendChild(rc);
+      svg.appendChild(svgEl('text', {x: padL + w + 6, y: y + rowH * 0.65, style: 'font-size:10.5px;fill:var(--muted)'}, pct(v)));
+    });
+    $('sharePubList').innerHTML = pubArr.map(([p, v]) =>
+      `<li><span class="swatch" style="background:${pubColor(p)}"></span><span class="rname">${esc(p)}</span><span class="rdetail">${fmtNum(v)}부</span><span class="rpct">${pct(v)}</span></li>`).join('');
+
+    /* 지역별 출판사 점유율 (100% 누적 막대) */
+    $('shareLegend').innerHTML = pubArr.map(([p]) =>
+      `<span style="display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px"><span style="width:10px;height:10px;border-radius:2px;background:${pubColor(p)}"></span>${esc(p)}</span>`).join('');
+    const regs = Array.from(byReg).map(([r, m]) => [r, m, Array.from(m.values()).reduce((a, b) => a + b, 0)]).sort((a, b) => b[2] - a[2]);
+    const rs = $('shareRegChart'); rs.innerHTML = '';
+    const W2 = 900, rh = 26, pl = 56, pr = 90, pt = 8, H2 = pt * 2 + Math.max(1, regs.length) * rh, pw2 = W2 - pl - pr;
+    rs.setAttribute('viewBox', `0 0 ${W2} ${H2}`);
+    regs.forEach(([r, m, t], i) => {
+      const y = pt + i * rh; let x = pl;
+      rs.appendChild(svgEl('text', {x: pl - 8, y: y + rh * 0.65, 'text-anchor': 'end'}, r));
+      pubs.forEach(p => {
+        const v = m.get(p); if(!v) return;
+        const w = v / t * pw2;
+        const rc = svgEl('rect', {x: x, y: y + 3, width: w, height: rh - 6, fill: pubColor(p)});
+        tip(rc, $('shareTip2'), `<strong>${esc(r)} · ${esc(p)}</strong> ${fmtNum(v)}부 (${(v / t * 100).toFixed(1)}%)`);
+        rs.appendChild(rc);
+        if(w > 34) rs.appendChild(svgEl('text', {x: x + w / 2, y: y + rh * 0.65, 'text-anchor': 'middle', style: 'font-size:10px;fill:#fff;pointer-events:none'}, (v / t * 100).toFixed(0) + '%'));
+        x += w;
+      });
+      rs.appendChild(svgEl('text', {x: pl + pw2 + 8, y: y + rh * 0.65, style: 'font-size:10.5px;fill:var(--muted)'}, fmtNum(t) + '부'));
+    });
+  }
+
+  fetch('textbook_orders.json', {cache: 'no-store'})
+    .then(r => { if(!r.ok) throw new Error('파일 응답 오류 (' + r.status + ')'); return r.json(); })
+    .then(d => {
+      pubs = d.pubs;
+      const rows = d.rows.map(([s, j, p, q]) => {
+        const sc = d.schools[s];
+        return {sid: s, region: sc[0], district: sc[1], estType: sc[2], schoolName: sc[3], subject: d.subjects[j], publisher: d.pubs[p], qty: q};
+      });
+      makeController({
+        data: rows,
+        filters: [
+          {key: 'region', label: '지역'}, {key: 'district', label: '교육지원청'}, {key: 'estType', label: '설립구분'},
+          {key: 'subject', label: '과목'}, {key: 'publisher', label: '출판사'}
+        ],
+        columns: [
+          {key: 'region', label: '지역'}, {key: 'district', label: '교육지원청'}, {key: 'estType', label: '설립구분'},
+          {key: 'schoolName', label: '학교명'}, {key: 'subject', label: '과목'}, {key: 'publisher', label: '출판사'},
+          {key: 'qty', label: '주문부수', numeric: true, render: r => fmtNum(r.qty)}
+        ],
+        searchInputId: 'shareSearch',
+        searchFields: ['schoolName', 'district'],
+        sortDefault: {key: 'qty', dir: 'desc'},
+        filterBarEl: $('shareFilterBar'),
+        countEl: $('shareCount'),
+        pagerEl: $('sharePager'),
+        tableEl: $('shareTable'),
+        renderKpis: renderShare
+      });
+    })
+    .catch(e => {
+      console.error(e);
+      $('shareCount').innerHTML = '<span class="state-msg err">textbook_orders.json 을 불러오지 못했습니다. index.html 과 같은 폴더에 올렸는지 확인해주세요.<br><code>' + esc(e.message) + '</code></span>';
+    });
+})();
+</script>
+</body>
+</html>
